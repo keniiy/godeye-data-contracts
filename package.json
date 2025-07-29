@@ -1,7 +1,7 @@
 {
   "name": "@kenniy/godeye-data-contracts",
   "version": "1.0.0",
-  "description": "Standardized data contracts and infrastructure patterns for GOD-EYE microservices",
+  "description": "Microsoft-grade base repository architecture for GOD-EYE microservices with zero overhead and maximum code reuse",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -17,12 +17,14 @@
   },
   "keywords": [
     "microservices",
-    "data-contracts",
+    "base-repository",
     "typeorm",
-    "mongoose",
+    "mongoose", 
     "nestjs",
-    "validation",
-    "response-patterns",
+    "microsoft-grade",
+    "performance",
+    "zero-overhead",
+    "enterprise",
     "kong-auth"
   ],
   "author": "Kenniy",
@@ -48,6 +50,7 @@
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.0.0",
     "jest": "^29.0.0",
+    "ts-node": "^10.9.0",
     "ts-jest": "^29.0.0",
     "typescript": "^5.0.0"
   },

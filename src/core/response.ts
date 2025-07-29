@@ -1,0 +1,246 @@
+import {
+  IResponse,
+  IPagination,
+  IResponseMetadata,
+} from "../types/response.types";
+import { buildBaseResponseMetadata, generateTraceId } from '../utils/response-builder.utils';
+
+/**
+ * ResponseFactory - Standardized response creation across all services
+ *
+ * This factory ensures consistent response format throughout the entire
+ * microservices ecosystem while providing performance monitoring capabilities.
+ */
+export class ResponseFactory {
+  /**
+   * Create a successful response
+   */
+  static success<T>(
+    data: T,
+    message: string = "Operation successful",
+    metadata?: Partial<IResponseMetadata>,
+    start_time?: number
+  ): IResponse<T> {
+    const baseMetadata = buildBaseResponseMetadata(start_time);
+
+    return {
+      success: true,
+      data,
+      message,
+      status_code: 200,
+      ...baseMetadata,
+      metadata,
+    };
+  }
+
+  /**
+   * Create a paginated response
+   */
+  static paginated<T>(
+    items: T[],
+    total: number,
+    page: number,
+    limit: number,
+    message: string = "Data retrieved successfully",
+    metadata?: Partial<IResponseMetadata>,
+    start_time?: number
+  ): IResponse<T[]> {
+    const total_pages = Math.ceil(total / limit);
+    const baseMetadata = buildBaseResponseMetadata(start_time);
+
+    const pagination: IPagination = {
+      total,
+      page,
+      limit,
+      total_pages,
+      has_next: page < total_pages,
+      has_prev: page > 1,
+    };
+
+    return {
+      success: true,
+      data: items,
+      message,
+      status_code: 200,
+      ...baseMetadata,
+      pagination,
+      metadata,
+    };
+  }
+
+  /**
+   * Create an error response
+   */
+  static error(
+    error: string,
+    message: string,
+    status_code: number = 400,
+    metadata?: Partial<IResponseMetadata>,
+    start_time?: number
+  ): IResponse<never> {
+    const baseMetadata = buildBaseResponseMetadata(start_time);
+
+    return {
+      success: false,
+      error,
+      message,
+      status_code,
+      ...baseMetadata,
+      metadata,
+    };
+  }
+
+  // ============================================================================
+  // COMMON ERROR TYPES - Convenient methods for standard HTTP errors
+  // ============================================================================
+
+  /**
+   * 400 Bad Request
+   */
+  static badRequest(
+    message: string,
+    error: string = "Bad Request",
+    metadata?: Partial<IResponseMetadata>,
+    start_time?: number
+  ): IResponse<never> {
+    return this.error(error, message, 400, metadata, start_time);
+  }
+
+  /**
+   * 401 Unauthorized
+   */
+  static unauthorized(
+    message: string = "Unauthorized access",
+    metadata?: Partial<IResponseMetadata>,
+    start_time?: number
+  ): IResponse<never> {
+    return this.error("Unauthorized", message, 401, metadata, start_time);
+  }
+
+  /**
+   * 403 Forbidden
+   */
+  static forbidden(
+    message: string = "Access forbidden",
+    metadata?: Partial<IResponseMetadata>,
+    start_time?: number
+  ): IResponse<never> {
+    return this.error("Forbidden", message, 403, metadata, start_time);
+  }
+
+  /**
+   * 404 Not Found
+   */
+  static notFound(
+    message: string = "Resource not found",
+    metadata?: Partial<IResponseMetadata>,
+    start_time?: number
+  ): IResponse<never> {
+    return this.error("Not Found", message, 404, metadata, start_time);
+  }
+
+  /**
+   * 422 Validation Error
+   */
+  static validationError(
+    message: string,
+    validation_errors: string[],
+    metadata?: Partial<IResponseMetadata>,
+    start_time?: number
+  ): IResponse<never> {
+    const enhanced_metadata = {
+      ...metadata,
+      validation_errors,
+    };
+
+    return this.error(
+      "Validation Error",
+      message,
+      422,
+      enhanced_metadata,
+      start_time
+    );
+  }
+
+  /**
+   * 429 Rate Limited
+   */
+  static rateLimited(
+    message: string = "Rate limit exceeded",
+    rate_limit_remaining: number = 0,
+    metadata?: Partial<IResponseMetadata>,
+    start_time?: number
+  ): IResponse<never> {
+    const enhanced_metadata = {
+      ...metadata,
+      rate_limit_remaining,
+    };
+
+    return this.error(
+      "Rate Limited",
+      message,
+      429,
+      enhanced_metadata,
+      start_time
+    );
+  }
+
+  /**
+   * 500 Internal Server Error
+   */
+  static serverError(
+    message: string = "Internal server error",
+    metadata?: Partial<IResponseMetadata>,
+    start_time?: number
+  ): IResponse<never> {
+    return this.error(
+      "Internal Server Error",
+      message,
+      500,
+      metadata,
+      start_time
+    );
+  }
+
+  // ============================================================================
+  // UTILITY METHODS
+  // ============================================================================
+
+
+  /**
+   * Get current system performance metrics
+   * Call this to automatically populate performance metadata
+   */
+  static getPerformanceMetrics(): Partial<IResponseMetadata> {
+    if (typeof process !== "undefined" && process.memoryUsage) {
+      const memUsage = process.memoryUsage();
+      const cpuUsage = process.cpuUsage ? process.cpuUsage() : null;
+
+      return {
+        heap_used_mb: Math.round((memUsage.heapUsed / 1024 / 1024) * 100) / 100,
+        heap_total_mb:
+          Math.round((memUsage.heapTotal / 1024 / 1024) * 100) / 100,
+        memory_used_mb: Math.round((memUsage.rss / 1024 / 1024) * 100) / 100,
+        // Note: CPU usage calculation would need additional implementation
+        // for accurate real-time values
+      };
+    }
+
+    return {};
+  }
+
+  /**
+   * Create response with automatic performance monitoring
+   */
+  static successWithMetrics<T>(
+    data: T,
+    message: string = "Operation successful",
+    custom_metadata?: Partial<IResponseMetadata>,
+    start_time?: number
+  ): IResponse<T> {
+    const performance_metrics = this.getPerformanceMetrics();
+    const metadata = { ...performance_metrics, ...custom_metadata };
+
+    return this.success(data, message, metadata, start_time);
+  }
+}
