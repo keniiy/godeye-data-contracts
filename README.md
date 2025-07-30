@@ -22,7 +22,7 @@ pnpm add @kenniy/godeye-data-contracts
 
 **Simple Usage:**
 ```typescript
-// Universal interface works with any entity  
+// Universal interface works with any entity
 const users = await userRepo.find({
   where: { status: 'active', userType: 'business' },
   relations: ['profile', 'business'],
@@ -141,7 +141,7 @@ export class FileController {
 
 ## ✨ Features
 
-- **🏗️ Microsoft-Grade Base Classes** - Zero overhead inheritance with native ORM performance
+- **🏗️ Enterprise-Grade Base Classes** - Zero overhead inheritance with native ORM performance
 - **⚡ Optimized Query Execution** - < 4% overhead, parallel operations, bulk processing
 - **📊 Advanced Performance Monitoring** - Slow query detection, APM integration, metrics collection
 - **🔐 Kong Authentication** - Seamless Gateway integration with decorators

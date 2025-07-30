@@ -1,7 +1,7 @@
 /**
  * Base TypeORM Repository - Zero Runtime Overhead
- * 
- * Microsoft-grade implementation with:
+ *
+ * Enterprise-grade implementation with:
  * - Compile-time ORM optimization
  * - Generic type safety
  * - Performance monitoring
@@ -9,26 +9,31 @@
  * - Full test coverage hooks
  */
 
-import { Injectable } from '@nestjs/common';
-import { Repository, SelectQueryBuilder, EntityTarget, ObjectLiteral } from 'typeorm';
-import { 
-  IPaginationOptions, 
-  IPaginationResult, 
+import { Injectable } from "@nestjs/common";
+import {
+  Repository,
+  SelectQueryBuilder,
+  EntityTarget,
+  ObjectLiteral,
+} from "typeorm";
+import {
+  IPaginationOptions,
+  IPaginationResult,
   ICriteria,
   ISortOptions,
-  IQueryMetrics 
-} from '../types';
+  IQueryMetrics,
+} from "../types";
 
 /**
  * Abstract base repository optimized for TypeORM
  * Zero runtime abstraction - all TypeORM calls are direct
- * 
+ *
  * @template T - Entity type with proper TypeORM decorators
  */
 @Injectable()
 export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   protected readonly entityName: string;
-  
+
   constructor(
     protected readonly repository: Repository<T>,
     protected readonly entityTarget: EntityTarget<T>
@@ -40,9 +45,9 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    * Convenience methods for common patterns
    */
   async findById(id: string | number, relations?: string[]): Promise<T | null> {
-    return this.findOne({ 
+    return this.findOne({
       where: { id } as any,
-      relations
+      relations,
     });
   }
 
@@ -53,7 +58,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   }
 
   // ============================================================================
-  // CORE QUERY METHODS - Direct TypeORM, Zero Overhead  
+  // CORE QUERY METHODS - Direct TypeORM, Zero Overhead
   // ============================================================================
 
   /**
@@ -62,19 +67,19 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    */
   async findOne(criteria: ICriteria<T>): Promise<T | null> {
     const startTime = performance.now();
-    
+
     try {
       const queryBuilder = this.createOptimizedQueryBuilder();
       this.applyCriteria(queryBuilder, criteria);
-      
+
       const result = await queryBuilder.getOne();
-      
-      // Performance monitoring for Microsoft review
-      this.logQueryMetrics('findOne', performance.now() - startTime, criteria);
-      
+
+      // Performance monitoring for Enterprise review
+      this.logQueryMetrics("findOne", performance.now() - startTime, criteria);
+
       return result;
     } catch (error) {
-      this.handleQueryError('findOne', error, criteria);
+      this.handleQueryError("findOne", error, criteria);
       throw error;
     }
   }
@@ -85,22 +90,22 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    */
   async find(criteria: ICriteria<T> = {}): Promise<T[]> {
     const startTime = performance.now();
-    
+
     try {
       const queryBuilder = this.createOptimizedQueryBuilder();
       this.applyCriteria(queryBuilder, criteria);
-      
+
       if (criteria.limit) {
         queryBuilder.limit(criteria.limit);
       }
-      
+
       const results = await queryBuilder.getMany();
-      
-      this.logQueryMetrics('find', performance.now() - startTime, criteria);
-      
+
+      this.logQueryMetrics("find", performance.now() - startTime, criteria);
+
       return results;
     } catch (error) {
-      this.handleQueryError('find', error, criteria);
+      this.handleQueryError("find", error, criteria);
       throw error;
     }
   }
@@ -108,37 +113,40 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   /**
    * Optimized pagination with parallel count query
    * Performance: ~10-20ms (query + count executed in parallel)
-   * 
-   * Microsoft-grade optimization: Uses Promise.all for parallel execution
+   *
+   * Enterprise-grade optimization: Uses Promise.all for parallel execution
    */
   async findWithPagination(
     criteria: ICriteria<T> & IPaginationOptions
   ): Promise<IPaginationResult<T>> {
     const startTime = performance.now();
     const { page = 1, limit = 20, ...queryCriteria } = criteria;
-    
+
     try {
       // Create separate query builders for data and count
       const dataQueryBuilder = this.createOptimizedQueryBuilder();
       const countQueryBuilder = this.createOptimizedQueryBuilder();
-      
+
       // Apply criteria to both builders
       this.applyCriteria(dataQueryBuilder, queryCriteria);
       this.applyCriteria(countQueryBuilder, queryCriteria);
-      
+
       // Apply pagination to data query
       const skip = (page - 1) * limit;
       dataQueryBuilder.skip(skip).take(limit);
-      
-      // Execute both queries in parallel - Microsoft optimization pattern
+
+      // Execute both queries in parallel - Enterprise optimization pattern
       const [items, total] = await Promise.all([
         dataQueryBuilder.getMany(),
-        countQueryBuilder.getCount()
+        countQueryBuilder.getCount(),
       ]);
-      
+
       const queryTime = performance.now() - startTime;
-      this.logQueryMetrics('findWithPagination', queryTime, criteria, { total, returned: items.length });
-      
+      this.logQueryMetrics("findWithPagination", queryTime, criteria, {
+        total,
+        returned: items.length,
+      });
+
       return {
         items,
         total,
@@ -146,10 +154,10 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
         limit,
         totalPages: Math.ceil(total / limit),
         hasNext: page * limit < total,
-        hasPrev: page > 1
+        hasPrev: page > 1,
       };
     } catch (error) {
-      this.handleQueryError('findWithPagination', error, criteria);
+      this.handleQueryError("findWithPagination", error, criteria);
       throw error;
     }
   }
@@ -160,17 +168,17 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    */
   async create(data: Partial<T>): Promise<T> {
     const startTime = performance.now();
-    
+
     try {
       // TypeORM create + save pattern (optimized for single entity)
       const entity = this.repository.create(data as any);
       const saved = await this.repository.save(entity);
-      
-      this.logQueryMetrics('create', performance.now() - startTime, { data });
-      
-      return Array.isArray(saved) ? saved[0] as T : saved as T;
+
+      this.logQueryMetrics("create", performance.now() - startTime, { data });
+
+      return Array.isArray(saved) ? (saved[0] as T) : (saved as T);
     } catch (error) {
-      this.handleQueryError('create', error, { data });
+      this.handleQueryError("create", error, { data });
       throw error;
     }
   }
@@ -181,16 +189,18 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    */
   async createMany(data: Partial<T>[]): Promise<T[]> {
     const startTime = performance.now();
-    
+
     try {
-      // TypeORM bulk insert optimization  
+      // TypeORM bulk insert optimization
       const saved = await this.repository.save(data as any[]);
-      
-      this.logQueryMetrics('createMany', performance.now() - startTime, { count: data.length });
-      
+
+      this.logQueryMetrics("createMany", performance.now() - startTime, {
+        count: data.length,
+      });
+
       return saved as T[];
     } catch (error) {
-      this.handleQueryError('createMany', error, { count: data.length });
+      this.handleQueryError("createMany", error, { count: data.length });
       throw error;
     }
   }
@@ -201,21 +211,24 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    */
   async updateById(id: string | number, data: Partial<T>): Promise<T | null> {
     const startTime = performance.now();
-    
+
     try {
       // Direct TypeORM update (more efficient than find + save)
       await this.repository.update(id, data);
-      
+
       // Return updated entity with optimized query
-      const updated = await this.repository.findOne({ 
-        where: { id } as any 
+      const updated = await this.repository.findOne({
+        where: { id } as any,
       });
-      
-      this.logQueryMetrics('updateById', performance.now() - startTime, { id, fields: Object.keys(data) });
-      
+
+      this.logQueryMetrics("updateById", performance.now() - startTime, {
+        id,
+        fields: Object.keys(data),
+      });
+
       return updated;
     } catch (error) {
-      this.handleQueryError('updateById', error, { id, data });
+      this.handleQueryError("updateById", error, { id, data });
       throw error;
     }
   }
@@ -224,18 +237,24 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    * Optimized bulk updates with batch processing
    * Performance: ~20-100ms for 1000 updates (vs ~5000ms individual updates)
    */
-  async updateMany(criteria: Partial<T>, data: Partial<T>): Promise<{ affected: number }> {
+  async updateMany(
+    criteria: Partial<T>,
+    data: Partial<T>
+  ): Promise<{ affected: number }> {
     const startTime = performance.now();
-    
+
     try {
       const result = await this.repository.update(criteria, data);
       const affected = result.affected || 0;
-      
-      this.logQueryMetrics('updateMany', performance.now() - startTime, { criteria, affected });
-      
+
+      this.logQueryMetrics("updateMany", performance.now() - startTime, {
+        criteria,
+        affected,
+      });
+
       return { affected };
     } catch (error) {
-      this.handleQueryError('updateMany', error, { criteria, data });
+      this.handleQueryError("updateMany", error, { criteria, data });
       throw error;
     }
   }
@@ -246,39 +265,47 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    */
   async deleteById(id: string | number): Promise<boolean> {
     const startTime = performance.now();
-    
+
     try {
       const result = await this.repository.delete(id);
       const deleted = (result.affected || 0) > 0;
-      
-      this.logQueryMetrics('deleteById', performance.now() - startTime, { id, deleted });
-      
+
+      this.logQueryMetrics("deleteById", performance.now() - startTime, {
+        id,
+        deleted,
+      });
+
       return deleted;
     } catch (error) {
-      this.handleQueryError('deleteById', error, { id });
+      this.handleQueryError("deleteById", error, { id });
       throw error;
     }
   }
 
   // ============================================================================
-  // ADVANCED QUERY OPTIMIZATION - Microsoft-grade performance patterns
+  // ADVANCED QUERY OPTIMIZATION - Enterprise-grade performance patterns
   // ============================================================================
 
   /**
    * Raw SQL execution for complex queries that need maximum performance
    * Use when TypeORM QueryBuilder becomes a bottleneck
    */
-  async executeRawQuery<R = any>(sql: string, parameters: any[] = []): Promise<R[]> {
+  async executeRawQuery<R = any>(
+    sql: string,
+    parameters: any[] = []
+  ): Promise<R[]> {
     const startTime = performance.now();
-    
+
     try {
       const results = await this.repository.query(sql, parameters);
-      
-      this.logQueryMetrics('rawQuery', performance.now() - startTime, { sql: sql.substring(0, 100) });
-      
+
+      this.logQueryMetrics("rawQuery", performance.now() - startTime, {
+        sql: sql.substring(0, 100),
+      });
+
       return results;
     } catch (error) {
-      this.handleQueryError('rawQuery', error, { sql });
+      this.handleQueryError("rawQuery", error, { sql });
       throw error;
     }
   }
@@ -290,20 +317,22 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    * - Configures connection pooling hints
    */
   protected createOptimizedQueryBuilder(alias?: string): SelectQueryBuilder<T> {
-    const queryBuilder = this.repository.createQueryBuilder(alias || this.entityName.toLowerCase());
-    
-    // Microsoft optimization: Enable query result caching for read-heavy operations
+    const queryBuilder = this.repository.createQueryBuilder(
+      alias || this.entityName.toLowerCase()
+    );
+
+    // Enterprise optimization: Enable query result caching for read-heavy operations
     // queryBuilder.cache(true, 30000); // 30 second cache - enable in production
-    
+
     return queryBuilder;
   }
 
   /**
    * Apply search criteria with SQL injection protection and optimization
-   * Microsoft security standard: All user input properly parameterized
+   * Enterprise security standard: All user input properly parameterized
    */
   protected applyCriteria(
-    queryBuilder: SelectQueryBuilder<T>, 
+    queryBuilder: SelectQueryBuilder<T>,
     criteria: ICriteria<T>
   ): void {
     const { where, relations, select, sort } = criteria;
@@ -315,7 +344,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
         if (value !== undefined) {
           const paramKey = `${key}_${index}`;
           const condition = `${alias}.${key} = :${paramKey}`;
-          
+
           if (index === 0) {
             queryBuilder.where(condition, { [paramKey]: value });
           } else {
@@ -327,7 +356,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
 
     // Apply relations with optimized JOIN strategy
     if (relations?.length) {
-      relations.forEach(relation => {
+      relations.forEach((relation) => {
         // Use leftJoinAndSelect for optional relations
         // Use innerJoinAndSelect for required relations (better performance)
         queryBuilder.leftJoinAndSelect(`${alias}.${relation}`, relation);
@@ -336,33 +365,36 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
 
     // Apply field selection (reduces data transfer)
     if (select?.length) {
-      const selectedFields = select.map(field => `${alias}.${String(field)}`);
+      const selectedFields = select.map((field) => `${alias}.${String(field)}`);
       queryBuilder.select(selectedFields);
     }
 
     // Apply sorting with index optimization hints
     if (sort) {
       Object.entries(sort).forEach(([field, direction]) => {
-        queryBuilder.addOrderBy(`${alias}.${field}`, direction as 'ASC' | 'DESC');
+        queryBuilder.addOrderBy(
+          `${alias}.${field}`,
+          direction as "ASC" | "DESC"
+        );
       });
     } else {
       // Default sort by ID for consistent pagination
-      queryBuilder.orderBy(`${alias}.id`, 'DESC');
+      queryBuilder.orderBy(`${alias}.id`, "DESC");
     }
   }
 
   // ============================================================================
-  // MICROSOFT-GRADE MONITORING & OBSERVABILITY
+  // Enterprise-GRADE MONITORING & OBSERVABILITY
   // ============================================================================
 
   /**
-   * Query performance monitoring for Microsoft-grade observability
+   * Query performance monitoring for Enterprise-grade observability
    * Integrates with APM tools (Application Insights, DataDog, etc.)
    */
   protected logQueryMetrics(
-    operation: string, 
-    duration: number, 
-    criteria: any, 
+    operation: string,
+    duration: number,
+    criteria: any,
     metadata?: any
   ): void {
     const metrics: IQueryMetrics = {
@@ -371,13 +403,17 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
       duration: Math.round(duration * 100) / 100, // Round to 2 decimal places
       criteria: JSON.stringify(criteria).substring(0, 200), // Truncate large criteria
       metadata,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
-    // Microsoft pattern: Structured logging for observability
-    if (duration > 100) { // Log slow queries (>100ms)
-      console.warn(`Slow query detected: ${operation} on ${this.entityName} took ${duration}ms`, metrics);
-    } else if (process.env.NODE_ENV === 'development') {
+    // Enterprise pattern: Structured logging for observability
+    if (duration > 100) {
+      // Log slow queries (>100ms)
+      console.warn(
+        `Slow query detected: ${operation} on ${this.entityName} took ${duration}ms`,
+        metrics
+      );
+    } else if (process.env.NODE_ENV === "development") {
       console.log(`Query: ${operation} on ${this.entityName} (${duration}ms)`);
     }
 
@@ -387,9 +423,13 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
 
   /**
    * Error handling with proper error classification and logging
-   * Microsoft standard: Detailed error context for debugging
+   * Enterprise standard: Detailed error context for debugging
    */
-  protected handleQueryError(operation: string, error: any, context: any): void {
+  protected handleQueryError(
+    operation: string,
+    error: any,
+    context: any
+  ): void {
     const errorContext = {
       operation,
       entity: this.entityName,
@@ -397,35 +437,40 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
       code: error.code,
       context: JSON.stringify(context).substring(0, 500),
       timestamp: new Date().toISOString(),
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     };
 
-    console.error(`Database error in ${operation} on ${this.entityName}:`, errorContext);
+    console.error(
+      `Database error in ${operation} on ${this.entityName}:`,
+      errorContext
+    );
 
     // TODO: Integrate with error tracking service
     // errorTracker.captureException(error, { extra: errorContext });
   }
 
   // ============================================================================
-  // TRANSACTION SUPPORT - Microsoft-grade ACID compliance
+  // TRANSACTION SUPPORT - Enterprise-grade ACID compliance
   // ============================================================================
 
   /**
    * Execute operations within a database transaction
-   * Microsoft pattern: Proper transaction lifecycle management
+   * Enterprise pattern: Proper transaction lifecycle management
    */
   async withTransaction<R>(
     callback: (transactionManager: Repository<T>) => Promise<R>
   ): Promise<R> {
     const queryRunner = this.repository.manager.connection.createQueryRunner();
-    
+
     try {
       await queryRunner.connect();
       await queryRunner.startTransaction();
-      
-      const transactionRepository = queryRunner.manager.getRepository(this.entityTarget);
+
+      const transactionRepository = queryRunner.manager.getRepository(
+        this.entityTarget
+      );
       const result = await callback(transactionRepository);
-      
+
       await queryRunner.commitTransaction();
       return result;
     } catch (error) {

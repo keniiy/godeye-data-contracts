@@ -13,7 +13,8 @@ import { buildBaseResponseMetadata, generateTraceId } from '../utils/response-bu
  */
 export class ResponseFactory {
   /**
-   * Create a successful response
+   * Create a successful response with auto-detection
+   * Automatically detects if data is paginated and formats accordingly
    */
   static success<T>(
     data: T,
@@ -21,6 +22,25 @@ export class ResponseFactory {
     metadata?: Partial<IResponseMetadata>,
     start_time?: number
   ): IResponse<T> {
+    // Auto-detect if this is paginated data
+    if (this.isPaginatedData(data)) {
+      const paginatedData = data as any;
+      
+      // Extract pagination data from various formats
+      const { items, total, page, limit } = this.extractPaginationData(paginatedData);
+      
+      return this.paginated(
+        items,
+        total,
+        page,
+        limit,
+        message,
+        metadata,
+        start_time
+      ) as IResponse<T>;
+    }
+
+    // Standard success response
     const baseMetadata = buildBaseResponseMetadata(start_time);
 
     return {
@@ -206,6 +226,98 @@ export class ResponseFactory {
   // UTILITY METHODS
   // ============================================================================
 
+  /**
+   * Auto-detect if data is paginated by checking for various pagination formats
+   * Supports multiple common pagination patterns
+   */
+  private static isPaginatedData(data: any): boolean {
+    if (!data || typeof data !== 'object') return false;
+    
+    // Format 1: { items: [...], total: 50, page?: 1, limit?: 20 }
+    if ('items' in data && 'total' in data && 
+        Array.isArray(data.items) && typeof data.total === 'number') {
+      return true;
+    }
+    
+    // Format 2: { data: [...], total: 50, page?: 1, limit?: 20 }
+    if ('data' in data && 'total' in data && 
+        Array.isArray(data.data) && typeof data.total === 'number') {
+      return true;
+    }
+    
+    // Format 3: { results: [...], count: 50, page?: 1, limit?: 20 }
+    if ('results' in data && 'count' in data && 
+        Array.isArray(data.results) && typeof data.count === 'number') {
+      return true;
+    }
+    
+    // Format 4: { rows: [...], totalCount: 50, page?: 1, limit?: 20 }
+    if ('rows' in data && 'totalCount' in data && 
+        Array.isArray(data.rows) && typeof data.totalCount === 'number') {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Extract pagination data from various formats
+   * Normalizes different pagination structures to standard format
+   */
+  private static extractPaginationData(data: any): {
+    items: any[];
+    total: number;
+    page: number;
+    limit: number;
+  } {
+    // Format 1: { items: [...], total: 50, page?: 1, limit?: 20 }
+    if ('items' in data && 'total' in data) {
+      return {
+        items: data.items,
+        total: data.total,
+        page: data.page || 1,
+        limit: data.limit || 20
+      };
+    }
+    
+    // Format 2: { data: [...], total: 50, page?: 1, limit?: 20 }
+    if ('data' in data && 'total' in data) {
+      return {
+        items: data.data,
+        total: data.total,
+        page: data.page || 1,
+        limit: data.limit || 20
+      };
+    }
+    
+    // Format 3: { results: [...], count: 50, page?: 1, limit?: 20 }
+    if ('results' in data && 'count' in data) {
+      return {
+        items: data.results,
+        total: data.count,
+        page: data.page || 1,
+        limit: data.limit || 20
+      };
+    }
+    
+    // Format 4: { rows: [...], totalCount: 50, page?: 1, limit?: 20 }
+    if ('rows' in data && 'totalCount' in data) {
+      return {
+        items: data.rows,
+        total: data.totalCount,
+        page: data.page || 1,
+        limit: data.limit || 20
+      };
+    }
+    
+    // Fallback (shouldn't happen if isPaginatedData works correctly)
+    return {
+      items: [],
+      total: 0,
+      page: 1,
+      limit: 20
+    };
+  }
 
   /**
    * Get current system performance metrics

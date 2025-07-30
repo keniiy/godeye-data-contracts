@@ -1,7 +1,7 @@
 {
   "name": "@kenniy/godeye-data-contracts",
   "version": "1.0.0",
-  "description": "Microsoft-grade base repository architecture for GOD-EYE microservices with zero overhead and maximum code reuse",
+  "description": "Enterprise-grade base repository architecture for GOD-EYE microservices with zero overhead and maximum code reuse",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -19,9 +19,9 @@
     "microservices",
     "base-repository",
     "typeorm",
-    "mongoose", 
+    "mongoose",
     "nestjs",
-    "microsoft-grade",
+    "Enterprise-grade",
     "performance",
     "zero-overhead",
     "enterprise",

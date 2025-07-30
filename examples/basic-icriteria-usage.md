@@ -232,7 +232,7 @@ async function findBusinesses(businessRepo: BaseTypeORMRepository<Business>) {
 
 ## Key Takeaways
 
-### ✅ ICriteria<T> is Universal
+### ✅ `ICriteria<T>` is Universal
 
 - Works with User, File, Business, **ANY entity**
 - Same interface, same methods, same patterns

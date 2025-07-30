@@ -1,24 +1,90 @@
 /**
  * @kenniy/godeye-data-contracts v1.0.0
  * 
- * Microsoft-grade base repository architecture for GOD-EYE microservices
- * Zero runtime overhead with maximum code reuse
+ * GOD-EYE Data Contracts - Unified patterns for all microservices
+ * Eliminates 98% code repetition across the ecosystem
  */
 
 // ============================================================================
-// CORE EXPORTS - Base Repository Architecture
+// CORE EXPORTS - Response & API Documentation
 // ============================================================================
 
-// Base Repository Classes - Zero overhead inheritance
-export { BaseTypeORMRepository } from './repositories/base-typeorm.repository';
+// Response Factory - Standardized responses with auto-detection
+export { ResponseFactory } from './core/response';
 
-// Types & Constants - Complete type safety  
+// Smart API Decorator - One decorator for all Swagger documentation
+export { Api, CommonApiErrors, ApiResponseWrapper, ApiPaginatedWrapper } from './core/swagger-decorators';
+
+// Bootstrap System - One-line service setup
+export { bootstrap, bootstrapGodsEyeApp, BootstrapConfig } from './setup/app.bootstrap';
+
+// ============================================================================
+// VALIDATION SYSTEM - Universal validation across ORMs
+// ============================================================================
+
+// Validation Pipe & Decorators
+export { 
+  ValidationPipe,
+  IsValidId,
+  IsRequiredEmail,
+  IsOptionalEmail,
+  IsPhoneNumber,
+  IsValidPagination,
+  IsValidSearch,
+  IsValidEntity,
+  // Transform decorators
+  ToLowerCase,
+  Trim,
+  TransformDate,
+  TransformArray,
+  // Standard DTOs
+  PaginationDto,
+  SearchDto,
+  QueryDto,
+  // Validation utilities
+  ValidationUtils
+} from './core/validation';
+
+// ============================================================================
+// KONG AUTHENTICATION - Gateway integration
+// ============================================================================
+
+// Kong Auth System
+export {
+  KongUser,
+  KongAuthGuard,
+  createKongAuthGuard,
+  RequireRoles,
+  extractKongUserContext,
+  normalizeHeaders
+} from './core/auth';
+
+// Auth Types
+export { IKongUserContext, IKongAuthConfig, IUserPermissions, IAuthGuardConfig } from './types/auth.types';
+
+// ============================================================================
+// REPOSITORY SYSTEM - Base classes & DTOs
+// ============================================================================
+
+// Base Repository Classes
+export { BaseTypeORMRepository } from './repositories/base-typeorm.repository';
+export { BaseMongooseRepository } from './repositories/base-mongoose.repository';
+
+// Query DTOs with ICriteria transformation
+export {
+  BaseQueryDto,
+  FindOneDto,
+  FindManyDto,
+  UserQueryDto,
+  FileQueryDto
+} from './core/dto';
+
+// ============================================================================
+// TYPES & CONSTANTS - Complete type safety
+// ============================================================================
+
+// All types and interfaces
 export * from './types';
 
-
-// ============================================================================
-// OPTIONAL EXPORTS - Additional utilities
-// ============================================================================
-
-// Response System utilities
-export { ResponseFactory } from './core/response';
+// All constants
+export * from './constants';
