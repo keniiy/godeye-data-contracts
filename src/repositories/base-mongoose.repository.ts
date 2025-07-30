@@ -9,8 +9,7 @@
  * - Performance monitoring integration
  */
 
-// @ts-nocheck - Complex Mongoose type compatibility issues
-// This will be addressed in future versions
+// Note: Some Mongoose type compatibility issues exist but functionality is verified through tests
 
 import { Injectable } from '@nestjs/common';
 import { Model, Document, FilterQuery, UpdateQuery, AggregateOptions, ClientSession } from 'mongoose';
@@ -74,12 +73,14 @@ export abstract class BaseMongooseRepository<T extends Document> {
       // Apply population (MongoDB JOIN equivalent)
       if (criteria.relations?.length) {
         criteria.relations.forEach(relation => {
+          // @ts-expect-error - Mongoose type complexity with populate
           query = query.populate(relation);
         });
       }
 
       // Apply field selection (reduces network transfer)
       if (criteria.select?.length) {
+        // @ts-expect-error - Mongoose type complexity with select
         query = query.select(criteria.select.join(' '));
       }
 
@@ -109,6 +110,7 @@ export abstract class BaseMongooseRepository<T extends Document> {
       // Apply population with selective field loading
       if (criteria.relations?.length) {
         criteria.relations.forEach(relation => {
+          // @ts-expect-error - Mongoose type complexity with populate
           query = query.populate(relation);
         });
       }
@@ -225,6 +227,7 @@ export abstract class BaseMongooseRepository<T extends Document> {
 
       this.logQueryMetrics('createMany', performance.now() - startTime, { count: data.length });
 
+      // @ts-expect-error - Mongoose insertMany return type complexity
       return documents as T[];
     } catch (error) {
       this.handleQueryError('createMany', error, { count: data.length });

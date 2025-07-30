@@ -1,6 +1,6 @@
 {
   "name": "@kenniy/godeye-data-contracts",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Enterprise-grade base repository architecture for GOD-EYE microservices with zero overhead and maximum code reuse",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -46,9 +46,9 @@
   "devDependencies": {
     "@types/jest": "^29.0.0",
     "@types/node": "^20.0.0",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.38.0",
+    "@typescript-eslint/parser": "^8.38.0",
+    "eslint": "8.57.1",
     "jest": "^29.0.0",
     "ts-jest": "^29.0.0",
     "ts-node": "^10.9.0",
