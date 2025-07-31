@@ -55,11 +55,38 @@ export class User {
 
 ## 2. Repository Setup
 
+### TypeORM Setup
 ```typescript
 import { BaseTypeORMRepository } from '@kenniy/godeye-data-contracts';
 
 export class UserRepository extends BaseTypeORMRepository<User> {
   // Repository automatically inherits all intelligent functionality
+  // Supports advanced whereConfig pattern with searchConfig and dynamicConditions
+}
+```
+
+### Mongoose Setup
+```typescript
+import { BaseMongooseRepository } from '@kenniy/godeye-data-contracts';
+
+export class UserRepository extends BaseMongooseRepository<User> {
+  // Same interface as TypeORM - supports whereConfig pattern
+  // Auto-converts relations to populate, where to match conditions
+}
+```
+
+### Custom Enhanced Repository (Recommended)
+```typescript
+// For projects using our enhanced repositories with advanced search
+import { BaseTypeORMRepository } from './libs/dal/repositories/base'; // Our enhanced version
+// or
+import { BaseMongooseRepository } from './libs/dal/repositories/base'; // Our enhanced version
+
+export class UserRepository extends BaseTypeORMRepository<User> {
+  // Enhanced with complete whereConfig support:
+  // - Advanced searchConfig with multiple strategies
+  // - Dynamic conditions based on query context
+  // - Backward compatibility with package interface
 }
 ```
 
@@ -246,6 +273,9 @@ const queryDto = {
 ✅ **Deep Relations**: Supports nested population (`business.owner`)  
 ✅ **TypeScript Safety**: Full type checking throughout  
 ✅ **Consistent Responses**: Same format across all endpoints  
+✅ **Dual ORM Support**: Same interface for TypeORM and Mongoose  
+✅ **Database Agnostic**: Switch between PostgreSQL and MongoDB seamlessly  
+✅ **Enhanced Repositories**: Advanced whereConfig with backward compatibility  
 
 ## 7. Search Algorithm Options
 
