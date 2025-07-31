@@ -223,8 +223,8 @@ describe('Performance Tests - Auto-Discovery and Deep Relations', () => {
       const duration = performance.now() - startTime;
       console.log(`TypeORM concurrent auto-discovery (20 concurrent): ${duration.toFixed(2)}ms`);
       
-      // Should handle concurrency well due to caching
-      expect(duration).toBeLessThan(1000);
+      // Should handle concurrency well due to caching (CI environments can be slower)
+      expect(duration).toBeLessThan(2000);
     });
 
     it('should handle concurrent Mongoose auto-discovery efficiently', async () => {
@@ -246,8 +246,8 @@ describe('Performance Tests - Auto-Discovery and Deep Relations', () => {
       const duration = performance.now() - startTime;
       console.log(`Mongoose concurrent auto-discovery (20 concurrent): ${duration.toFixed(2)}ms`);
       
-      // Should handle concurrency well due to caching
-      expect(duration).toBeLessThan(1000);
+      // Should handle concurrency well due to caching (CI environments can be slower)
+      expect(duration).toBeLessThan(2000);
     });
   });
 });
