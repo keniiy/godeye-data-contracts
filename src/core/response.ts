@@ -29,27 +29,46 @@ export class ResponseFactory {
       // Extract pagination data from various formats
       const { items, total, page, limit } = this.extractPaginationData(paginatedData);
       
+      // Extract embedded metadata from repository result
+      const embeddedMetadata = paginatedData.metadata || {};
+      const combinedMetadata = { ...embeddedMetadata, ...metadata };
+      
       return this.paginated(
         items,
         total,
         page,
         limit,
         message,
-        metadata,
+        combinedMetadata,
         start_time
       ) as IResponse<T>;
     }
 
-    // Standard success response
+    // Standard success response (single entity or array with embedded metadata)
     const baseMetadata = buildBaseResponseMetadata(start_time);
+    
+    // Extract embedded metadata for single entity results
+    let embeddedMetadata = {};
+    let actualData = data;
+    if (data && typeof data === 'object' && 'data' in data && 'metadata' in data) {
+      embeddedMetadata = (data as any).metadata || {};
+      actualData = (data as any).data;
+    } else if (data && typeof data === 'object' && 'metadata' in data && !('items' in data)) {
+      // Handle case where metadata is at root level but not pagination
+      embeddedMetadata = (data as any).metadata || {};
+      const { metadata: _, ...dataWithoutMetadata } = data as any;
+      actualData = dataWithoutMetadata;
+    }
+    
+    const combinedMetadata = { ...embeddedMetadata, ...metadata };
 
     return {
       success: true,
-      data,
+      data: actualData,
       message,
       status_code: 200,
       ...baseMetadata,
-      metadata,
+      metadata: combinedMetadata,
     };
   }
 

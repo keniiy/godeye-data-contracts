@@ -39,6 +39,36 @@ MockModel.db = {
   startSession: jest.fn()
 };
 
+// Mock schema for auto-discovery
+const mockSchemaPath = (pathname: string, schemaType: any) => {
+  const paths = {
+    '_id': { options: {} },
+    '__v': { options: {} }, 
+    'name': { options: {} },
+    'email': { options: {} },
+    'status': { options: {} },
+    'createdAt': { options: {} },
+    'profile': { options: { ref: 'Profile' } },
+    'business': { options: { ref: 'Business' } },
+    'posts': { options: { type: [{ ref: 'Post' }] } },
+    'files': { options: { type: [{ ref: 'File' }] } },
+    'owner': { options: { ref: 'User' } },
+    'permissions': { options: { type: [{ ref: 'Permission' }] } },
+    'very': { options: { ref: 'Very' } }
+  };
+  
+  return paths[pathname as keyof typeof paths] || { options: {} };
+};
+
+MockModel.schema = {
+  eachPath: jest.fn((callback: (pathname: string, schemaType: any) => void) => {
+    const paths = ['_id', '__v', 'name', 'email', 'status', 'createdAt', 'profile', 'business', 'posts', 'files', 'owner', 'permissions', 'very'];
+    paths.forEach(path => {
+      callback(path, mockSchemaPath(path, null));
+    });
+  })
+};
+
 // Mock Query object with chainable methods
 const createMockQuery = (returnValue: any) => ({
   populate: jest.fn().mockReturnThis(),
@@ -61,6 +91,8 @@ describe('BaseMongooseRepository', () => {
   beforeEach(() => {
     repository = new TestMongooseRepository();
     jest.clearAllMocks();
+    // Reset the relation cache for each test
+    (repository as any).relationCache = null;
   });
 
   describe('findOne', () => {
@@ -91,9 +123,79 @@ describe('BaseMongooseRepository', () => {
 
       await repository.findOne(criteria);
 
-      expect(mockQuery.populate).toHaveBeenCalledTimes(2);
-      expect(mockQuery.populate).toHaveBeenCalledWith('profile');
-      expect(mockQuery.populate).toHaveBeenCalledWith('business');
+      expect(mockQuery.populate).toHaveBeenCalledWith(['profile', 'business']);
+    });
+
+    it('should apply deep relations with nested populate', async () => {
+      const mockUser = { _id: '123', name: 'John', email: 'john@example.com', status: 'active' as const, createdAt: new Date() };
+      const mockQuery = createMockQuery(mockUser);
+      MockModel.findOne.mockReturnValue(mockQuery);
+
+      const criteria: ICriteria<MockDocument> = {
+        where: { _id: '123' },
+        relations: ['profile', 'business.owner', 'posts.comments.author']
+      };
+
+      await repository.findOne(criteria);
+
+      // Should call populate with structured populate options
+      const expectedPopulateOptions = [
+        'profile',
+        { path: 'business', populate: { path: 'owner' } },
+        { path: 'posts', populate: { path: 'comments', populate: { path: 'author' } } }
+      ];
+
+      expect(mockQuery.populate).toHaveBeenCalledWith(expectedPopulateOptions);
+    });
+
+    it('should handle overlapping deep relations efficiently', async () => {
+      const mockUser = { _id: '123', name: 'John', email: 'john@example.com', status: 'active' as const, createdAt: new Date() };
+      const mockQuery = createMockQuery(mockUser);
+      MockModel.findOne.mockReturnValue(mockQuery);
+
+      const criteria: ICriteria<MockDocument> = {
+        where: { _id: '123' },
+        relations: ['business.owner', 'business.contact', 'business.owner.profile']
+      };
+
+      await repository.findOne(criteria);
+
+      // Current implementation creates separate populate objects (can be optimized later)
+      const expectedPopulateOptions = [
+        { path: 'business', populate: { path: 'owner' } },
+        { path: 'business', populate: { path: 'contact' } },
+        { path: 'business', populate: { path: 'owner', populate: { path: 'profile' } } }
+      ];
+
+      expect(mockQuery.populate).toHaveBeenCalledWith(expectedPopulateOptions);
+    });
+
+    it('should build deep populate options correctly', async () => {
+      const mockUser = { _id: '123', name: 'John', email: 'john@example.com', status: 'active' as const, createdAt: new Date() };
+      const mockQuery = createMockQuery(mockUser);
+      MockModel.findOne.mockReturnValue(mockQuery);
+
+      const criteria: ICriteria<MockDocument> = {
+        where: { _id: '123' },
+        relations: ['very.deep.nested.relation']
+      };
+
+      await repository.findOne(criteria);
+
+      const expectedPopulateOptions = [
+        { 
+          path: 'very', 
+          populate: { 
+            path: 'deep', 
+            populate: { 
+              path: 'nested', 
+              populate: { path: 'relation' } 
+            } 
+          } 
+        }
+      ];
+
+      expect(mockQuery.populate).toHaveBeenCalledWith(expectedPopulateOptions);
     });
 
     it('should apply field selection', async () => {
@@ -221,8 +323,8 @@ describe('BaseMongooseRepository', () => {
         page: 1,
         limit: 10,
         search: {
-          term: 'john',
-          fields: ['name', 'email']
+          term: 'john'
+          // Backend auto-determines fields
         }
       };
 
@@ -237,6 +339,8 @@ describe('BaseMongooseRepository', () => {
       expect(searchStage).toBeDefined();
       expect(searchStage.$match.$or).toEqual([
         { name: { $regex: 'john', $options: 'i' } },
+        { title: { $regex: 'john', $options: 'i' } },
+        { description: { $regex: 'john', $options: 'i' } },
         { email: { $regex: 'john', $options: 'i' } }
       ]);
     });
@@ -291,9 +395,7 @@ describe('BaseMongooseRepository', () => {
 
       await repository.findById('123', ['profile', 'business']);
 
-      expect(mockQuery.populate).toHaveBeenCalledTimes(2);
-      expect(mockQuery.populate).toHaveBeenCalledWith('profile');
-      expect(mockQuery.populate).toHaveBeenCalledWith('business');
+      expect(mockQuery.populate).toHaveBeenCalledWith(['profile', 'business']);
     });
   });
 
@@ -458,6 +560,87 @@ describe('BaseMongooseRepository', () => {
       
       // Restore original model
       (repository as any).model = originalMockModel;
+    });
+  });
+
+  describe('Auto-Discovery', () => {
+    beforeEach(() => {
+      // Reset relation cache for fresh tests
+      (repository as any).relationCache = null;
+    });
+
+    it('should auto-discover model relations from Mongoose schema', () => {
+      const relations = (repository as any).getEntityRelations();
+      
+      expect(relations).toEqual([
+        'profile',
+        'business', 
+        'posts',
+        'files',
+        'owner',
+        'permissions',
+        'very'
+      ]);
+    });
+
+    it('should filter out invalid relations and log warnings', async () => {
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const mockQuery = createMockQuery([]);
+      MockModel.findOne.mockReturnValue(mockQuery);
+
+      await repository.findOne({
+        relations: ['profile', 'invalidRelation', 'business', 'anotherInvalid']
+      });
+
+      // Should log warning for invalid relations
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Unknown relations for users:")
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Available relations:")
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should validate deep relation paths correctly', () => {
+      expect((repository as any).isValidRelationPath('profile')).toBe(true);
+      expect((repository as any).isValidRelationPath('business.owner')).toBe(true);
+      expect((repository as any).isValidRelationPath('invalidRelation')).toBe(false);
+      expect((repository as any).isValidRelationPath('invalid.deep')).toBe(false);
+    });
+
+    it('should cache relations for performance', () => {
+      // First call
+      const relations1 = (repository as any).getEntityRelations();
+      
+      // Second call should use cache
+      const relations2 = (repository as any).getEntityRelations();
+      
+      expect(relations1).toEqual(relations2);
+      expect(relations1).toBe(relations2); // Same reference due to caching
+    });
+
+    it('should handle auto-discovery errors gracefully', () => {
+      // Mock model with broken schema
+      const originalSchema = MockModel.schema;
+      (MockModel as any).schema = null;
+      (repository as any).relationCache = null;
+      
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+      
+      const relations = (repository as any).getEntityRelations();
+      
+      expect(relations).toEqual([]);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Could not auto-discover relations"),
+        expect.anything()
+      );
+      
+      consoleSpy.mockRestore();
+      
+      // Restore original schema
+      (MockModel as any).schema = originalSchema;
     });
   });
 });

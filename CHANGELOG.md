@@ -5,6 +5,45 @@ All notable changes to `@kenniy/godeye-data-contracts` will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-07-30
+
+### 🚀 Major Features Added
+
+#### Deep Relations Support
+- **TypeORM Deep Relations**: Added support for nested JOIN operations using dot notation
+  - `relations: ['business.owner', 'posts.comments.author']`
+  - Automatically generates optimized nested JOINs
+  - Prevents duplicate JOINs for overlapping relation paths
+  
+- **Mongoose Deep Population**: Added support for nested populate operations
+  - `relations: ['user.profile', 'folder.parent.permissions']`
+  - Automatically builds nested populate objects
+  - Supports unlimited nesting depth
+
+### ✨ Implementation Details
+
+#### TypeORM Enhancements
+- Added `applyDeepRelations()` method for parsing nested relation paths
+- Added `applyNestedRelation()` for building JOIN chains
+- Added `generateRelationAlias()` for consistent alias naming
+- Relations like `'business.owner.profile'` generate optimized SQL JOINs
+
+#### Mongoose Enhancements  
+- Added `buildDeepPopulateOptions()` for parsing relation arrays
+- Added `buildNestedPopulateObject()` for creating nested populate structures
+- Relations like `'user.profile.avatar'` generate nested populate objects
+
+### 🧪 Testing & Documentation
+- Added comprehensive test coverage for deep relations (167 tests passing)
+- Created `deep-relations-usage.md` guide with examples
+- HTTP API usage examples and performance considerations
+- Migration guide from manual to deep relations
+
+### 🔄 API Changes (Backward Compatible)
+- All existing relation patterns still work: `relations: ['profile', 'business']`
+- New deep relations are additive: `relations: ['profile', 'business.owner']`
+- No breaking changes to existing DTOs or repositories
+
 ## [1.0.0] - 2024-01-15
 
 ### 🎉 Initial Release

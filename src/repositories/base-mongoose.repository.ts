@@ -30,9 +30,98 @@ import {
 @Injectable()
 export abstract class BaseMongooseRepository<T extends Document> {
   protected readonly collectionName: string;
+  private relationCache: string[] | null = null;
 
   constructor(protected readonly model: Model<T>) {
     this.collectionName = model.collection.name;
+  }
+
+  /**
+   * Auto-discover all relations for this model using Mongoose schema inspection
+   * Eliminates need for manual getKnownRelations() methods
+   */
+  protected getEntityRelations(): string[] {
+    if (this.relationCache !== null) {
+      return this.relationCache;
+    }
+
+    try {
+      const schema = this.model.schema;
+      const relations: string[] = [];
+
+      // Iterate through schema paths
+      schema.eachPath((pathname: string, schemaType: any) => {
+        // Skip internal Mongoose fields
+        if (pathname.startsWith('_') || pathname === '__v') {
+          return;
+        }
+
+        // Check if path has a ref (indicates relation)
+        if (schemaType.options && schemaType.options.ref) {
+          relations.push(pathname);
+        }
+
+        // Check for array of refs
+        if (schemaType.options && schemaType.options.type && Array.isArray(schemaType.options.type)) {
+          const arrayType = schemaType.options.type[0];
+          if (arrayType && arrayType.ref) {
+            relations.push(pathname);
+          }
+        }
+
+        // Check for subdocument schemas with refs
+        if (schemaType.schema) {
+          relations.push(pathname);
+        }
+      });
+
+      // Cache the result
+      this.relationCache = [...new Set(relations)]; // Remove duplicates
+      return this.relationCache;
+    } catch (error: any) {
+      console.warn(`Could not auto-discover relations for model ${this.collectionName}:`, error?.message || error);
+      this.relationCache = [];
+      return this.relationCache;
+    }
+  }
+
+  /**
+   * Check if a relation path is valid for this model
+   * Supports deep relations like 'user.profile'
+   */
+  protected isValidRelationPath(relationPath: string): boolean {
+    const knownRelations = this.getEntityRelations();
+    const rootRelation = relationPath.split('.')[0];
+    return knownRelations.includes(rootRelation);
+  }
+
+  /**
+   * Auto-discover searchable fields for this model
+   * Similar to relation auto-discovery but for text fields
+   */
+  protected getSearchableFields(): string[] {
+    // For now, return basic text fields - can be enhanced with schema inspection
+    return ['name', 'title', 'description', 'email'];
+  }
+
+  /**
+   * Validate relations and warn about invalid ones (but don't filter them out)
+   * Let Mongoose handle invalid relations gracefully
+   */
+  protected validateRelations(relations: string[]): string[] {
+    const knownRelations = this.getEntityRelations();
+    const invalidRelations = relations.filter(relationPath => {
+      const rootRelation = relationPath.split('.')[0];
+      return !knownRelations.includes(rootRelation);
+    });
+
+    // Warn about invalid relations but continue
+    if (invalidRelations.length > 0) {
+      console.warn(`⚠️ Unknown relations for ${this.collectionName}: ${invalidRelations.join(', ')}`);
+      console.warn(`📋 Available relations: ${knownRelations.join(', ')}`);
+    }
+
+    return relations; // Return all relations - let Mongoose handle gracefully
   }
 
   /**
@@ -70,12 +159,15 @@ export abstract class BaseMongooseRepository<T extends Document> {
     try {
       let query = this.model.findOne(criteria.where || {});
 
-      // Apply population (MongoDB JOIN equivalent)
+      // Apply population (MongoDB JOIN equivalent) with deep nesting support
+      // Validate and warn about invalid relations but still attempt to populate them
       if (criteria.relations?.length) {
-        criteria.relations.forEach(relation => {
+        const validatedRelations = this.validateRelations(criteria.relations);
+        if (validatedRelations.length > 0) {
+          const populateOptions = this.buildDeepPopulateOptions(validatedRelations);
           // @ts-expect-error - Mongoose type complexity with populate
-          query = query.populate(relation);
-        });
+          query = query.populate(populateOptions);
+        }
       }
 
       // Apply field selection (reduces network transfer)
@@ -107,12 +199,15 @@ export abstract class BaseMongooseRepository<T extends Document> {
     try {
       let query = this.model.find(criteria.where || {});
 
-      // Apply population with selective field loading
+      // Apply population with selective field loading and deep nesting support
+      // Auto-validate relations using schema metadata
       if (criteria.relations?.length) {
-        criteria.relations.forEach(relation => {
+        const validRelations = this.validateRelations(criteria.relations);
+        if (validRelations.length > 0) {
+          const populateOptions = this.buildDeepPopulateOptions(validRelations);
           // @ts-expect-error - Mongoose type complexity with populate
-          query = query.populate(relation);
-        });
+          query = query.populate(populateOptions);
+        }
       }
 
       // Apply field selection
@@ -441,9 +536,10 @@ export abstract class BaseMongooseRepository<T extends Document> {
       pipeline.push({ $match: criteria.where });
     }
 
-    // Handle text search
+    // Handle intelligent text search
     if (criteria.search) {
-      const searchConditions = criteria.search.fields.map(field => ({
+      const searchFields = this.getSearchableFields();
+      const searchConditions = searchFields.map(field => ({
         [field]: { $regex: criteria.search!.term, $options: 'i' }
       }));
       pipeline.push({ $match: { $or: searchConditions } });
@@ -470,18 +566,101 @@ export abstract class BaseMongooseRepository<T extends Document> {
   }
 
   /**
-   * Build population stages using MongoDB's $lookup
+   * Build deep populate options for Mongoose with nested population support
+   * Handles relations like 'business.owner', 'posts.comments.author'
+   * 
+   * Examples:
+   * - ['profile', 'business.owner'] → [
+   *     'profile',
+   *     { path: 'business', populate: { path: 'owner' } }
+   *   ]
+   * - ['posts.comments.author'] → [
+   *     { path: 'posts', populate: { path: 'comments', populate: { path: 'author' } } }
+   *   ]
+   */
+  protected buildDeepPopulateOptions(relations: string[]): any[] {
+    const result: any[] = [];
+    
+    relations.forEach(relation => {
+      if (relation.includes('.')) {
+        // Handle nested relations like 'business.owner'
+        result.push(this.buildNestedPopulateObject(relation));
+      } else {
+        // Handle direct relations like 'profile'
+        result.push(relation);
+      }
+    });
+    
+    return result;
+  }
+
+  /**
+   * Build nested populate object for a single deep relation path
+   * Converts 'business.owner.contact' to { path: 'business', populate: { path: 'owner', populate: { path: 'contact' } } }
+   */
+  protected buildNestedPopulateObject(relationPath: string): any {
+    const pathParts = relationPath.split('.');
+    
+    // Build from the end backwards to create nested structure
+    let populateObj: any = { path: pathParts[pathParts.length - 1] };
+    
+    // Work backwards through the path parts
+    for (let i = pathParts.length - 2; i >= 0; i--) {
+      populateObj = {
+        path: pathParts[i],
+        populate: populateObj
+      };
+    }
+    
+    return populateObj;
+  }
+
+  /**
+   * Build population stages using MongoDB's $lookup (for aggregation pipeline)
    * More efficient than Mongoose's populate for complex relations
    */
   protected buildPopulationStages(relations: string[]): any[] {
-    return relations.map(relation => ({
-      $lookup: {
-        from: `${relation}s`, // Assuming standard pluralization
-        localField: relation,
-        foreignField: '_id',
-        as: relation
+    return relations.map(relation => {
+      if (relation.includes('.')) {
+        // For nested relations, we need to use multiple $lookup stages
+        return this.buildNestedLookupStages(relation);
+      } else {
+        // Simple lookup for direct relations
+        return {
+          $lookup: {
+            from: `${relation}s`, // Assuming standard pluralization
+            localField: relation,
+            foreignField: '_id',
+            as: relation
+          }
+        };
       }
-    }));
+    }).flat();
+  }
+
+  /**
+   * Build nested $lookup stages for aggregation pipeline
+   * Handles deep relations in aggregation queries
+   */
+  protected buildNestedLookupStages(relationPath: string): any[] {
+    const pathParts = relationPath.split('.');
+    const stages: any[] = [];
+    
+    for (let i = 0; i < pathParts.length; i++) {
+      const part = pathParts[i];
+      const fullPath = pathParts.slice(0, i + 1).join('.');
+      
+      stages.push({
+        $lookup: {
+          from: `${part}s`,
+          localField: i === 0 ? part : `${pathParts.slice(0, i).join('.')}.${part}`,
+          foreignField: '_id',
+          as: fullPath
+        }
+      });
+    }
+    
+    return stages;
   }
 
   // ============================================================================

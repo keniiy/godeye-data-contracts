@@ -35,6 +35,68 @@ export enum SortDirection {
 }
 
 /**
+ * Search strategies for intelligent field searching
+ * Backend repositories use these to determine how to match search terms
+ */
+export enum SearchStrategy {
+  EXACT = "exact",           // kenniy = kenniy (perfect match)
+  FUZZY = "fuzzy",           // kenniy ≈ Kenny, Kennedy (typo tolerance)
+  CONTAINS = "contains",     // kenniy in "kenniy@email.com" (substring match)
+  STARTS_WITH = "startsWith", // kenniy in "kenniy123" (prefix match)
+  ENDS_WITH = "endsWith",    // kenniy in "mikekenniy" (suffix match)
+  SOUNDEX = "soundex",       // kenniy sounds like Kenny (phonetic match)
+  SKIP = "skip"              // don't search this field for this term
+}
+
+/**
+ * Backend WHERE configuration for repository methods
+ * Separates backend control from frontend requests
+ */
+export interface IWhereConfig {
+  /** Backend-controlled WHERE conditions (always applied) */
+  conditions?: any;
+  
+  /** Backend-defined search field configurations */
+  searchConfig?: ISearchFieldConfig[];
+  
+  /** Dynamic conditions based on search context */
+  dynamicConditions?: (criteria: ICriteria<any>) => any;
+}
+
+/**
+ * Search field configuration for intelligent searching
+ * Repositories use this to configure how each field should be searched
+ */
+export interface ISearchFieldConfig {
+  /** Single field name to search in */
+  field?: string;
+  /** Multiple fields with same configuration */
+  fields?: string[];
+  /** Flag for database array fields */
+  isArray?: boolean;
+  /** Available search strategies for this field/fields */
+  strategies: SearchStrategy[];
+  /** Default strategy to use for this field/fields */
+  defaultStrategy: SearchStrategy;
+  /** Priority/relevance weight (higher = more important) */
+  priority: number;
+  /** Weight multiplier for relevance scoring (optional) */
+  weight?: number;
+}
+
+/**
+ * Enhanced search criteria with intelligent strategy selection
+ */
+export interface ISearchCriteria {
+  /** Search term from frontend */
+  term: string;
+  /** Backend-determined field configurations (not from frontend) */
+  fieldConfigs?: ISearchFieldConfig[];
+  /** Backend-determined global strategy override */
+  globalStrategy?: SearchStrategy;
+}
+
+/**
  * Query operation types for monitoring and logging
  */
 export enum QueryOperation {
@@ -185,11 +247,8 @@ export interface ICriteria<T> {
   /** Page number (1-based) for pagination */
   page?: number;
 
-  /** Search configuration */
-  search?: {
-    fields: string[];
-    term: string;
-  };
+  /** Intelligent search configuration */
+  search?: ISearchCriteria;
 }
 
 /**

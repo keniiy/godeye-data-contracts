@@ -14,6 +14,7 @@ export * from "./validation.types";
 export {
   ORMType,
   SortDirection,
+  SearchStrategy,
   QueryOperation,
   RepositoryErrorType,
   EntityStatus,
@@ -23,6 +24,9 @@ export {
   DEFAULT_REPOSITORY_CONFIG,
   ENTITY_FIELDS
 } from './repository.types';
+
+// Export interfaces separately to follow repo pattern
+export type { IWhereConfig } from './repository.types';
 
 // Aliases for backwards compatibility and cleaner imports
 export type { IPaginatedResult as IPaginationResult } from './response.types';

@@ -160,4 +160,107 @@ describe('ResponseFactory', () => {
       }
     });
   });
+
+  describe('Integration with Repository Results - WhereConfig Pattern', () => {
+    it('should handle repository pagination result', () => {
+      // Mock repository result with metadata (from our new pattern)  
+      const repositoryResult = {
+        items: [
+          { id: 'user123', firstName: 'Kenny', email: 'kenny@test.com' },
+          { id: 'user124', firstName: 'John', email: 'john@test.com' }
+        ],
+        total: 147,
+        page: 2,
+        limit: 50,
+        totalPages: 3,
+        hasNext: true,
+        hasPrev: true,
+        metadata: {
+          queryTime: '34ms',
+          searchAlgorithms: ['fuzzy', 'exact'],
+          backendConditions: ['status', 'isDeleted', 'isVerified'],
+          relationsLoaded: ['profile', 'business.owner'],
+          relationErrors: []
+        }
+      };
+
+      const response = ResponseFactory.success(repositoryResult);
+
+      expect(response.success).toBe(true);
+      expect(response.data).toBeDefined();
+      expect(response.metadata).toBeDefined();
+    });
+
+    it('should handle single entity result with metadata', () => {
+      const repositoryResult = {
+        data: {
+          id: 'user123',
+          firstName: 'Kenny',
+          profile: { bio: 'Developer...' }
+        },
+        metadata: {
+          queryTime: '12ms',
+          backendConditions: ['status', 'isDeleted'],
+          relationsLoaded: ['profile']
+        }
+      };
+
+      const response = ResponseFactory.success(repositoryResult);
+
+      expect(response.success).toBe(true);
+      expect(response.data).toBeDefined();
+      expect(response.metadata).toBeDefined();
+    });
+
+    it('should handle array result with metadata', () => {
+      const repositoryResult = {
+        items: [
+          { id: 'user123', firstName: 'John' },
+          { id: 'user124', firstName: 'Jane' }
+        ],
+        metadata: {
+          queryTime: '18ms',
+          searchAlgorithms: ['fuzzy'],
+          relationsLoaded: ['profile']
+        }
+      };
+
+      const response = ResponseFactory.success(repositoryResult);
+
+      expect(response.success).toBe(true);
+      expect(response.data).toBeDefined();
+      expect(response.metadata).toBeDefined();
+    });
+
+    it('should handle relation errors gracefully in metadata', () => {
+      const repositoryResult = {
+        items: [{ id: 'user123', firstName: 'Kenny' }],
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+        hasNext: false,
+        hasPrev: false,
+        metadata: {
+          queryTime: '25ms',
+          searchAlgorithms: ['fuzzy'],
+          backendConditions: ['status'],
+          relationsLoaded: ['profile'],
+          relationErrors: [
+            {
+              relation: 'business.owner',
+              error: 'Referenced user not found',
+              severity: 'warning'
+            }
+          ]
+        }
+      };
+
+      const response = ResponseFactory.success(repositoryResult);
+
+      expect(response.success).toBe(true);
+      expect(response.data).toBeDefined();
+      expect(response.metadata).toBeDefined();
+    });
+  });
 });

@@ -40,19 +40,13 @@ export class BaseQueryDto {
   @IsString()
   sort?: string;
 
-  @ApiPropertyOptional({ example: 'john doe', description: 'Search term' })
-  @IsOptional()
-  @IsString()
-  search?: string;
-
-  @ApiPropertyOptional({
-    example: 'name,email',
-    description: 'Fields to search in (comma-separated)'
+  @ApiPropertyOptional({ 
+    example: 'john doe', 
+    description: 'Search term - backend automatically determines fields and search strategy' 
   })
   @IsOptional()
   @IsString()
-  @Transform(({ value }) => typeof value === 'string' ? value.split(',').map(s => s.trim()) : value)
-  searchFields?: string[];
+  search?: string;
 
   @ApiPropertyOptional({
     example: 'active',
@@ -76,44 +70,44 @@ export class BaseQueryDto {
       select: includeFields.fields,
       sort: this.parseSortString(this.sort),
       search: this.search ? {
-        term: this.search,
-        fields: this.searchFields || ['name']
+        term: this.search
+        // Backend will auto-discover fields and determine search strategy
       } : undefined,
       where: this.buildWhereClause()
     };
   }
 
   /**
-   * Parse unified include parameter into relations and fields
-   * Auto-detects whether each item is a relation or field
+   * Parse unified include parameter into potential relations and fields
+   * Repository will validate which items are actual relations using auto-discovery
    */
   protected parseInclude(includeStr?: string): { relations: string[], fields: string[] } {
     if (!includeStr) return { relations: [], fields: [] };
 
     const items = includeStr.split(',').map(s => s.trim());
-    const relations: string[] = [];
-    const fields: string[] = [];
-
-    // Define known relations for this entity (override in subclasses)
-    const knownRelations = this.getKnownRelations();
-
-    items.forEach(item => {
-      if (knownRelations.includes(item)) {
-        relations.push(item);
-      } else {
-        fields.push(item);
-      }
-    });
-
-    return { relations, fields };
+    
+    // For now, treat all items as potential relations
+    // Repository will filter out invalid relations using auto-discovery
+    return {
+      relations: items.filter(item => this.looksLikeRelation(item)),
+      fields: items.filter(item => !this.looksLikeRelation(item))
+    };
   }
 
   /**
-   * Override in entity-specific DTOs to define known relations
-   * Base implementation returns common relations
+   * Basic heuristic to determine if an item looks like a relation
+   * Repository auto-discovery will provide final validation
    */
-  protected getKnownRelations(): string[] {
-    return ['createdBy', 'updatedBy']; // Common audit relations
+  private looksLikeRelation(item: string): boolean {
+    // Items with dots are likely deep relations (e.g., 'business.owner')
+    if (item.includes('.')) return true;
+    
+    // Common field patterns that are NOT relations
+    const fieldPatterns = ['id', 'name', 'email', 'createdAt', 'updatedAt', 'status', 'type'];
+    if (fieldPatterns.includes(item)) return false;
+    
+    // Assume other items could be relations (repository will validate)
+    return true;
   }
 
   protected parseSortString(sortStr?: string): Record<string, 'ASC' | 'DESC'> | undefined {

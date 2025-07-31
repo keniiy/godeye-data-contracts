@@ -29,6 +29,7 @@ describe('ResponseFactory', () => {
         time_ms: expect.any(Number),
         timestamp: expect.any(String),
         trace_id: expect.any(String),
+        metadata: {},
       });
     });
 

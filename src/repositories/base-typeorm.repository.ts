@@ -15,6 +15,7 @@ import {
   SelectQueryBuilder,
   EntityTarget,
   ObjectLiteral,
+  getMetadataArgsStorage,
 } from "typeorm";
 import {
   IPaginationOptions,
@@ -22,6 +23,9 @@ import {
   ICriteria,
   ISortOptions,
   IQueryMetrics,
+  IWhereConfig,
+  ISearchFieldConfig,
+  SearchStrategy,
 } from "../types";
 
 /**
@@ -33,6 +37,7 @@ import {
 @Injectable()
 export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   protected readonly entityName: string;
+  private relationCache: string[] | null = null;
 
   constructor(
     protected readonly repository: Repository<T>,
@@ -42,13 +47,73 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   }
 
   /**
-   * Convenience methods for common patterns
+   * Auto-discover all relations for this entity using TypeORM metadata
+   * Eliminates need for manual getKnownRelations() methods
    */
-  async findById(id: string | number, relations?: string[]): Promise<T | null> {
-    return this.findOne({
-      where: { id } as any,
-      relations,
+  protected getEntityRelations(): string[] {
+    if (this.relationCache !== null) {
+      return this.relationCache;
+    }
+
+    try {
+      // Use repository metadata directly - more reliable than metadata args storage
+      const entityMetadata = this.repository.metadata;
+      const relations: string[] = [];
+
+      // Get all relation metadata from entity metadata
+      entityMetadata.relations.forEach(relation => {
+        if (relation.propertyName) {
+          relations.push(relation.propertyName);
+        }
+      });
+
+      // Cache the result
+      this.relationCache = [...new Set(relations)]; // Remove duplicates
+      return this.relationCache;
+    } catch (error: any) {
+      console.warn(`Could not auto-discover relations for entity ${this.entityName}:`, error?.message || error);
+      this.relationCache = [];
+      return this.relationCache;
+    }
+  }
+
+  /**
+   * Check if a relation path is valid for this entity
+   * Supports deep relations like 'business.owner'
+   */
+  protected isValidRelationPath(relationPath: string): boolean {
+    const knownRelations = this.getEntityRelations();
+    const rootRelation = relationPath.split('.')[0];
+    return knownRelations.includes(rootRelation);
+  }
+
+  /**
+   * Auto-discover searchable fields for this entity
+   * Similar to relation auto-discovery but for text fields
+   */
+  protected getSearchableFields(): string[] {
+    // For now, return basic text fields - can be enhanced with metadata inspection
+    return ['name', 'title', 'description', 'email'];
+  }
+
+  /**
+   * Validate relations and warn about invalid ones (but don't filter them out)
+   * Let ORM handle invalid relations gracefully
+   */
+  protected validateRelations(relations: string[]): string[] {
+    const knownRelations = this.getEntityRelations();
+    const invalidRelations = relations.filter(relationPath => {
+      const rootRelation = relationPath.split('.')[0];
+      return !knownRelations.includes(rootRelation);
     });
+
+    // Warn about invalid relations but continue
+    if (invalidRelations.length > 0) {
+      console.warn(`⚠️ Unknown relations for ${this.entityName}: ${invalidRelations.join(', ')}`);
+      console.warn(`📋 Available relations: ${knownRelations.join(', ')}`);
+    }
+
+    return relations; // Return all relations - let ORM handle gracefully
   }
 
   async count(criteria: ICriteria<T> = {}): Promise<number> {
@@ -57,109 +122,322 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
     return queryBuilder.getCount();
   }
 
+  /**
+   * Optimized pagination with whereConfig pattern
+   * Clean separation of backend control and frontend requests
+   * Performance: ~10-20ms (query + count executed in parallel)
+   */
+  async findWithPagination(
+    whereConfig: IWhereConfig,
+    queryDto: any
+  ): Promise<IPaginationResult<T>> {
+    const criteria = queryDto.toICriteria();
+    return this.executeIntelligentSearch(whereConfig, criteria);
+  }
+
+  /**
+   * Find single entity with whereConfig pattern
+   */
+  async findOne(
+    whereConfig: IWhereConfig,
+    queryDto: any
+  ): Promise<T | null> {
+    const criteria = queryDto.toICriteria();
+    return this.executeIntelligentSearch(whereConfig, criteria, { single: true });
+  }
+
+  /**
+   * Find multiple entities with whereConfig pattern
+   */
+  async find(
+    whereConfig: IWhereConfig,
+    queryDto: any
+  ): Promise<T[]> {
+    const criteria = queryDto.toICriteria();
+    return this.executeIntelligentSearch(whereConfig, criteria, { array: true });
+  }
+
+  /**
+   * Find entity by ID with whereConfig pattern
+   */
+  async findById(
+    id: string | number,
+    whereConfig: IWhereConfig,
+    queryDto?: any
+  ): Promise<T | null> {
+    const criteria = queryDto ? queryDto.toICriteria() : {};
+    criteria.where = { ...criteria.where, id };
+    return this.executeIntelligentSearch(whereConfig, criteria, { single: true });
+  }
+
   // ============================================================================
-  // CORE QUERY METHODS - Direct TypeORM, Zero Overhead
+  // CORE INTELLIGENT SEARCH ENGINE
   // ============================================================================
 
   /**
-   * Find single entity with optimized query execution
-   * Performance: ~3-5ms for simple queries, ~8-12ms with relations
+   * Execute intelligent search with whereConfig and criteria
+   * Handles backend conditions, search algorithms, and relations
    */
-  async findOne(criteria: ICriteria<T>): Promise<T | null> {
+  async executeIntelligentSearch(
+    whereConfig: IWhereConfig,
+    criteria: ICriteria<T>,
+    options: { single?: boolean; array?: boolean } = {}
+  ): Promise<any> {
     const startTime = performance.now();
 
     try {
       const queryBuilder = this.createOptimizedQueryBuilder();
-      this.applyCriteria(queryBuilder, criteria);
 
-      const result = await queryBuilder.getOne();
+      // 1. Apply backend WHERE conditions
+      if (whereConfig.conditions) {
+        this.applyWhereConditions(queryBuilder, whereConfig.conditions);
+      }
 
-      // Performance monitoring for Enterprise review
-      this.logQueryMetrics("findOne", performance.now() - startTime, criteria);
+      // 2. Apply dynamic conditions if provided
+      if (whereConfig.dynamicConditions) {
+        const dynamicWhere = whereConfig.dynamicConditions(criteria);
+        this.applyWhereConditions(queryBuilder, dynamicWhere);
+      }
+
+      // 3. Apply frontend WHERE conditions (from DTO)
+      if (criteria.where) {
+        this.applyWhereConditions(queryBuilder, criteria.where);
+      }
+
+      // 4. Apply intelligent search with backend config
+      if (criteria.search?.term && whereConfig.searchConfig) {
+        this.applyConfiguredSearch(queryBuilder, criteria.search.term, whereConfig.searchConfig);
+      }
+
+      // 5. Apply relations with graceful error handling
+      const { validRelations, failedRelations } = this.applyRelationsWithErrorHandling(
+        queryBuilder,
+        criteria.relations || []
+      );
+
+      // 6. Apply sorting
+      if (criteria.sort) {
+        Object.entries(criteria.sort).forEach(([field, direction]) => {
+          queryBuilder.addOrderBy(`${queryBuilder.alias}.${field}`, direction as "ASC" | "DESC");
+        });
+      } else {
+        queryBuilder.orderBy(`${queryBuilder.alias}.id`, "DESC");
+      }
+
+      // 7. Execute based on options
+      let result: any;
+      if (options.single) {
+        result = {
+          data: await queryBuilder.getOne(),
+          metadata: this.buildMetadata(startTime, whereConfig, validRelations, failedRelations)
+        };
+      } else if (options.array) {
+        result = {
+          items: await queryBuilder.getMany(),
+          metadata: this.buildMetadata(startTime, whereConfig, validRelations, failedRelations)
+        };
+      } else {
+        // Pagination
+        const { page = 1, limit = 20 } = criteria;
+        const countQueryBuilder = this.createOptimizedQueryBuilder();
+        
+        // Apply same conditions to count query
+        this.copyConditionsToCountQuery(countQueryBuilder, queryBuilder, whereConfig, criteria);
+        
+        // Apply pagination
+        const skip = (page - 1) * limit;
+        queryBuilder.skip(skip).take(limit);
+
+        // Execute in parallel
+        const [items, total] = await Promise.all([
+          queryBuilder.getMany(),
+          countQueryBuilder.getCount()
+        ]);
+
+        result = {
+          items,
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+          hasNext: page * limit < total,
+          hasPrev: page > 1,
+          metadata: this.buildMetadata(startTime, whereConfig, validRelations, failedRelations, { total, returned: items.length })
+        };
+      }
 
       return result;
     } catch (error) {
-      this.handleQueryError("findOne", error, criteria);
+      this.handleQueryError("intelligentSearch", error, { whereConfig, criteria });
       throw error;
     }
   }
 
+  // ============================================================================
+  // INTELLIGENT SEARCH HELPER METHODS
+  // ============================================================================
+
   /**
-   * Find multiple entities with query optimization
-   * Performance: ~5-10ms for simple queries, ~15-25ms with complex joins
+   * Apply WHERE conditions to query builder
    */
-  async find(criteria: ICriteria<T> = {}): Promise<T[]> {
-    const startTime = performance.now();
-
-    try {
-      const queryBuilder = this.createOptimizedQueryBuilder();
-      this.applyCriteria(queryBuilder, criteria);
-
-      if (criteria.limit) {
-        queryBuilder.limit(criteria.limit);
+  protected applyWhereConditions(queryBuilder: SelectQueryBuilder<T>, conditions: any): void {
+    Object.entries(conditions).forEach(([key, value], index) => {
+      if (value !== undefined) {
+        const paramKey = `where_${key}_${index}`;
+        const condition = `${queryBuilder.alias}.${key} = :${paramKey}`;
+        
+        if (index === 0 && !queryBuilder.expressionMap.wheres.length) {
+          queryBuilder.where(condition, { [paramKey]: value });
+        } else {
+          queryBuilder.andWhere(condition, { [paramKey]: value });
+        }
       }
+    });
+  }
 
-      const results = await queryBuilder.getMany();
+  /**
+   * Apply configured search with backend-defined algorithms
+   */
+  protected applyConfiguredSearch(
+    queryBuilder: SelectQueryBuilder<T>,
+    searchTerm: string,
+    searchConfig: ISearchFieldConfig[]
+  ): void {
+    const searchConditions: string[] = [];
+    const parameters: any = {};
 
-      this.logQueryMetrics("find", performance.now() - startTime, criteria);
+    searchConfig.forEach((config, configIndex) => {
+      const fields = config.fields || [config.field!];
 
-      return results;
-    } catch (error) {
-      this.handleQueryError("find", error, criteria);
-      throw error;
+      fields.forEach((field, fieldIndex) => {
+        const paramKey = `search_${configIndex}_${fieldIndex}`;
+
+        switch (config.defaultStrategy) {
+          case SearchStrategy.FUZZY:
+            searchConditions.push(`levenshtein_distance(${queryBuilder.alias}.${field}, :${paramKey}) <= 2`);
+            parameters[paramKey] = searchTerm;
+            break;
+
+          case SearchStrategy.EXACT:
+            searchConditions.push(`${queryBuilder.alias}.${field} = :${paramKey}`);
+            parameters[paramKey] = searchTerm;
+            break;
+
+          case SearchStrategy.CONTAINS:
+            if (config.isArray) {
+              searchConditions.push(`:${paramKey} = ANY(${queryBuilder.alias}.${field})`);
+              parameters[paramKey] = searchTerm;
+            } else {
+              searchConditions.push(`${queryBuilder.alias}.${field} ILIKE :${paramKey}`);
+              parameters[paramKey] = `%${searchTerm}%`;
+            }
+            break;
+
+          case SearchStrategy.STARTS_WITH:
+            searchConditions.push(`${queryBuilder.alias}.${field} ILIKE :${paramKey}`);
+            parameters[paramKey] = `${searchTerm}%`;
+            break;
+
+          case SearchStrategy.ENDS_WITH:
+            searchConditions.push(`${queryBuilder.alias}.${field} ILIKE :${paramKey}`);
+            parameters[paramKey] = `%${searchTerm}`;
+            break;
+        }
+      });
+    });
+
+    if (searchConditions.length > 0) {
+      queryBuilder.andWhere(`(${searchConditions.join(' OR ')})`, parameters);
     }
   }
 
   /**
-   * Optimized pagination with parallel count query
-   * Performance: ~10-20ms (query + count executed in parallel)
-   *
-   * Enterprise-grade optimization: Uses Promise.all for parallel execution
+   * Apply relations with graceful error handling
    */
-  async findWithPagination(
-    criteria: ICriteria<T> & IPaginationOptions
-  ): Promise<IPaginationResult<T>> {
-    const startTime = performance.now();
-    const { page = 1, limit = 20, ...queryCriteria } = criteria;
+  protected applyRelationsWithErrorHandling(
+    queryBuilder: SelectQueryBuilder<T>,
+    relations: string[]
+  ): { validRelations: string[]; failedRelations: Array<{ relation: string; error: string; severity: string }> } {
+    const validRelations: string[] = [];
+    const failedRelations: Array<{ relation: string; error: string; severity: string }> = [];
 
-    try {
-      // Create separate query builders for data and count
-      const dataQueryBuilder = this.createOptimizedQueryBuilder();
-      const countQueryBuilder = this.createOptimizedQueryBuilder();
+    relations.forEach((relation) => {
+      try {
+        if (this.isValidRelationPath(relation)) {
+          this.applyDeepRelations(queryBuilder, [relation], queryBuilder.alias);
+          validRelations.push(relation);
+        } else {
+          failedRelations.push({
+            relation,
+            error: "Relation not found in entity metadata",
+            severity: "warning"
+          });
+        }
+      } catch (error: any) {
+        failedRelations.push({
+          relation,
+          error: error.message || "Failed to load relation",
+          severity: "warning"
+        });
+      }
+    });
 
-      // Apply criteria to both builders
-      this.applyCriteria(dataQueryBuilder, queryCriteria);
-      this.applyCriteria(countQueryBuilder, queryCriteria);
+    return { validRelations, failedRelations };
+  }
 
-      // Apply pagination to data query
-      const skip = (page - 1) * limit;
-      dataQueryBuilder.skip(skip).take(limit);
-
-      // Execute both queries in parallel - Enterprise optimization pattern
-      const [items, total] = await Promise.all([
-        dataQueryBuilder.getMany(),
-        countQueryBuilder.getCount(),
-      ]);
-
-      const queryTime = performance.now() - startTime;
-      this.logQueryMetrics("findWithPagination", queryTime, criteria, {
-        total,
-        returned: items.length,
-      });
-
-      return {
-        items,
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        hasNext: page * limit < total,
-        hasPrev: page > 1,
-      };
-    } catch (error) {
-      this.handleQueryError("findWithPagination", error, criteria);
-      throw error;
+  /**
+   * Copy conditions to count query for pagination
+   */
+  protected copyConditionsToCountQuery(
+    countQueryBuilder: SelectQueryBuilder<T>,
+    dataQueryBuilder: SelectQueryBuilder<T>,
+    whereConfig: IWhereConfig,
+    criteria: ICriteria<T>
+  ): void {
+    // Apply same WHERE conditions
+    if (whereConfig.conditions) {
+      this.applyWhereConditions(countQueryBuilder, whereConfig.conditions);
     }
+    if (whereConfig.dynamicConditions) {
+      const dynamicWhere = whereConfig.dynamicConditions(criteria);
+      this.applyWhereConditions(countQueryBuilder, dynamicWhere);
+    }
+    if (criteria.where) {
+      this.applyWhereConditions(countQueryBuilder, criteria.where);
+    }
+    
+    // Apply same search conditions
+    if (criteria.search?.term && whereConfig.searchConfig) {
+      this.applyConfiguredSearch(countQueryBuilder, criteria.search.term, whereConfig.searchConfig);
+    }
+  }
+
+  /**
+   * Build metadata for response
+   */
+  protected buildMetadata(
+    startTime: number,
+    whereConfig: IWhereConfig,
+    validRelations: string[],
+    failedRelations: Array<{ relation: string; error: string; severity: string }>,
+    additionalData?: any
+  ): any {
+    return {
+      queryTime: `${Math.round((performance.now() - startTime) * 100) / 100}ms`,
+      searchAlgorithms: this.extractAlgorithms(whereConfig.searchConfig),
+      backendConditions: Object.keys(whereConfig.conditions || {}),
+      relationsLoaded: validRelations,
+      relationErrors: failedRelations,
+      ...additionalData
+    };
+  }
+
+  /**
+   * Extract algorithms from search config
+   */
+  protected extractAlgorithms(searchConfig?: ISearchFieldConfig[]): string[] {
+    if (!searchConfig) return [];
+    return [...new Set(searchConfig.map(config => config.defaultStrategy))];
   }
 
   /**
@@ -354,13 +632,13 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
       });
     }
 
-    // Apply relations with optimized JOIN strategy
+    // Apply relations with optimized JOIN strategy (supports deep nesting)
+    // Validate and warn about invalid relations but still attempt to load them
     if (relations?.length) {
-      relations.forEach((relation) => {
-        // Use leftJoinAndSelect for optional relations
-        // Use innerJoinAndSelect for required relations (better performance)
-        queryBuilder.leftJoinAndSelect(`${alias}.${relation}`, relation);
-      });
+      const validatedRelations = this.validateRelations(relations);
+      if (validatedRelations.length > 0) {
+        this.applyDeepRelations(queryBuilder, validatedRelations, alias);
+      }
     }
 
     // Apply field selection (reduces data transfer)
@@ -381,6 +659,81 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
       // Default sort by ID for consistent pagination
       queryBuilder.orderBy(`${alias}.id`, "DESC");
     }
+  }
+
+  /**
+   * Apply deep relations with nested JOIN support
+   * Handles relations like 'business.owner', 'posts.comments.author'
+   * 
+   * Examples:
+   * - 'profile' → user.leftJoinAndSelect('user.profile', 'profile')
+   * - 'business.owner' → user.leftJoinAndSelect('user.business', 'business')
+   *                            .leftJoinAndSelect('business.owner', 'business_owner')
+   * - 'posts.comments.author' → user.leftJoinAndSelect('user.posts', 'posts')
+   *                                  .leftJoinAndSelect('posts.comments', 'posts_comments')
+   *                                  .leftJoinAndSelect('posts_comments.author', 'posts_comments_author')
+   */
+  protected applyDeepRelations(
+    queryBuilder: SelectQueryBuilder<T>,
+    relations: string[],
+    rootAlias: string
+  ): void {
+    const processedPaths = new Set<string>();
+
+    relations.forEach((relation) => {
+      if (relation.includes('.')) {
+        // Handle nested relations like 'business.owner'
+        this.applyNestedRelation(queryBuilder, relation, rootAlias, processedPaths);
+      } else {
+        // Handle direct relations like 'profile'
+        if (!processedPaths.has(relation)) {
+          queryBuilder.leftJoinAndSelect(`${rootAlias}.${relation}`, relation);
+          processedPaths.add(relation);
+        }
+      }
+    });
+  }
+
+  /**
+   * Apply a single nested relation with all its parent joins
+   * Automatically creates intermediate joins as needed
+   */
+  protected applyNestedRelation(
+    queryBuilder: SelectQueryBuilder<T>,
+    relationPath: string,
+    rootAlias: string,
+    processedPaths: Set<string>
+  ): void {
+    const pathParts = relationPath.split('.');
+    let currentAlias = rootAlias;
+    let currentPath = '';
+
+    for (let i = 0; i < pathParts.length; i++) {
+      const part = pathParts[i];
+      currentPath = currentPath ? `${currentPath}.${part}` : part;
+      
+      if (!processedPaths.has(currentPath)) {
+        const relationAlias = this.generateRelationAlias(currentPath);
+        const joinPath = `${currentAlias}.${part}`;
+        
+        queryBuilder.leftJoinAndSelect(joinPath, relationAlias);
+        processedPaths.add(currentPath);
+        
+        currentAlias = relationAlias;
+      } else {
+        // Update current alias for already processed path
+        currentAlias = this.generateRelationAlias(currentPath);
+      }
+    }
+  }
+
+  /**
+   * Generate consistent alias names for nested relations
+   * business.owner → business_owner
+   * posts.comments.author → posts_comments_author
+   */
+  protected generateRelationAlias(relationPath: string): string {
+    return relationPath.replace(/\./g, '_');
   }
 
   // ============================================================================

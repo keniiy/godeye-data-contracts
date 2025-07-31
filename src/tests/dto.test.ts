@@ -46,12 +46,11 @@ describe('DTO System', () => {
     it('should handle search configuration', () => {
       const dto = new BaseQueryDto();
       dto.search = 'john doe';
-      dto.searchFields = ['name', 'email'];
 
       const criteria = dto.toICriteria();
 
       expect(criteria.search?.term).toBe('john doe');
-      expect(criteria.search?.fields).toEqual(['name', 'email']);
+      // Backend determines fields automatically - no frontend control
     });
   });
 
@@ -181,7 +180,7 @@ describe('DTO System', () => {
       dto.userType = 'business';
       dto.verified = true;
       dto.search = 'john';
-      dto.searchFields = ['name', 'email'];
+      // searchFields removed - backend handles field selection
       dto.include = 'id,name,email,profile,business';
       dto.sort = 'createdAt:DESC,name:ASC';
       dto.createdAfter = '2023-01-01';
@@ -199,7 +198,7 @@ describe('DTO System', () => {
 
       // Search
       expect(criteria.search?.term).toBe('john');
-      expect(criteria.search?.fields).toEqual(['name', 'email']);
+      // Backend determines fields automatically
 
       // Include parsing
       expect(criteria.relations).toEqual(['profile', 'business']);
