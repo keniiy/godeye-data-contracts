@@ -13,6 +13,8 @@ import {
   ApiResponse, 
   ApiOkResponse,
   ApiCreatedResponse,
+  ApiOperation,
+  ApiExtraModels,
   getSchemaPath
 } from '@nestjs/swagger';
 import { DescriptionConfig } from './swagger';
@@ -57,16 +59,33 @@ export function Api<T>(
     const finalDescription = options.description;
 
     // Build decorators array
-    const decorators = [
-      // Success response
-      buildSuccessResponse(responseDto, message, status, isPaginated, finalDescription),
-      
-      // Common errors (unless excluded)
-      ...(options.excludeCommonErrors ? [] : [buildCommonErrors()]),
-      
-      // Custom errors
-      ...(options.errors?.map(errorCode => buildCustomError(errorCode)) || [])
-    ];
+    const decorators = [];
+    
+    // Add the DTO to extra models for proper schema generation
+    decorators.push(ApiExtraModels(responseDto));
+    
+    // Add operation description at the operation level (not in response)
+    if (finalDescription) {
+      decorators.push(
+        ApiOperation({
+          summary: message,
+          description: finalDescription
+        })
+      );
+    }
+    
+    // Success response (with simple message, not full description)
+    decorators.push(buildSuccessResponse(responseDto, message, status, isPaginated));
+    
+    // Common errors (unless excluded)
+    if (!options.excludeCommonErrors) {
+      decorators.push(buildCommonErrors());
+    }
+    
+    // Custom errors
+    if (options.errors) {
+      decorators.push(...options.errors.map(errorCode => buildCustomError(errorCode)));
+    }
     
     return applyDecorators(...decorators)(target, propertyKey, descriptor);
   };
@@ -158,14 +177,13 @@ function buildSuccessResponse<T>(
   responseDto: Type<T>,
   message: string,
   status: number,
-  isPaginated: boolean,
-  description?: string
+  isPaginated: boolean
 ) {
   const ResponseDecorator = status === 201 ? ApiCreatedResponse : ApiOkResponse;
   
   if (isPaginated) {
     return ResponseDecorator({
-      description: description || message,
+      description: message, // Use simple message, not full description
       schema: {
         type: 'object',
         properties: {
@@ -196,12 +214,12 @@ function buildSuccessResponse<T>(
   }
   
   return ResponseDecorator({
-    description: description || message,
+    description: message, // Use simple message, not full description
     schema: {
       type: 'object',
       properties: {
         success: { type: 'boolean', example: true },
-        data: { $ref: getSchemaPath(responseDto) },
+        data: { $ref: getSchemaPath(responseDto) }, // This should show DTO structure
         message: { type: 'string', example: message },
         status_code: { type: 'number', example: status },
         time_ms: { type: 'number', example: 45 },
