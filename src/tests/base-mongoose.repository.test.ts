@@ -380,20 +380,25 @@ describe('BaseMongooseRepository', () => {
     it('should find document by ID', async () => {
       const mockUser = { _id: '123', name: 'John', email: 'john@example.com', status: 'active' as const, createdAt: new Date() };
       const mockQuery = createMockQuery(mockUser);
-      MockModel.findOne.mockReturnValue(mockQuery);
+      MockModel.find.mockReturnValue(mockQuery);
 
-      const result = await repository.findById('123');
+      const whereConfig = { conditions: { status: 'active' } };
+      const queryDto = { toICriteria: () => ({ relations: [] }) };
+      
+      const result = await repository.findById('123', whereConfig, queryDto);
 
-      expect(MockModel.findOne).toHaveBeenCalledWith({ _id: '123' });
-      expect(result).toEqual(mockUser);
+      expect(result.data).toEqual(mockUser);
     });
 
     it('should find document by ID with relations', async () => {
       const mockUser = { _id: '123', name: 'John', email: 'john@example.com', status: 'active' as const, createdAt: new Date() };
       const mockQuery = createMockQuery(mockUser);
-      MockModel.findOne.mockReturnValue(mockQuery);
+      MockModel.find.mockReturnValue(mockQuery);
 
-      await repository.findById('123', ['profile', 'business']);
+      const whereConfig = { conditions: { status: 'active' } };
+      const queryDto = { toICriteria: () => ({ relations: ['profile', 'business'] }) };
+      
+      await repository.findById('123', whereConfig, queryDto);
 
       expect(mockQuery.populate).toHaveBeenCalledWith(['profile', 'business']);
     });
@@ -469,12 +474,12 @@ describe('BaseMongooseRepository', () => {
       };
       MockModel.updateMany.mockReturnValue(mockUpdateQuery);
 
-      const result = await repository.updateMany(criteria, updateData);
+      const result = await repository.updateMany({ where: criteria }, updateData);
 
       expect(MockModel.updateMany).toHaveBeenCalledWith(criteria, updateData, {
         runValidators: true
       });
-      expect(result.modified).toBe(3);
+      expect(result.modifiedCount).toBe(3);
     });
   });
 

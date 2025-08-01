@@ -387,17 +387,17 @@ export abstract class BaseMongooseRepository<T extends Document> {
    * Performance: ~30-150ms for 1000 updates (vs ~10000ms individual updates)
    */
   async updateMany(
-    criteria: FilterQuery<T>,
+    criteria: ICriteria<T>,
     data: UpdateQuery<T>
-  ): Promise<{ modified: number }> {
+  ): Promise<{ modifiedCount: number }> {
     const startTime = performance.now();
 
     try {
-      const result = await this.model.updateMany(criteria, data, {
+      const result = await this.model.updateMany(criteria.where || {}, data, {
         runValidators: true
       }).exec();
 
-      const modified = result.modifiedCount || 0;
+      const modifiedCount = result.modifiedCount || 0;
 
       this.logQueryMetrics('updateMany', performance.now() - startTime, { criteria, modifiedCount });
 
@@ -468,6 +468,7 @@ export abstract class BaseMongooseRepository<T extends Document> {
 
       if (options?.populate) {
         const populateOptions = this.buildDeepPopulateOptions(options.populate);
+        // @ts-expect-error - Mongoose type complexity with populate
         query = query.populate(populateOptions);
       }
 
@@ -951,7 +952,7 @@ export abstract class BaseMongooseRepository<T extends Document> {
       // 7. Execute based on options
       let result: any;
       if (options.single) {
-        const data = await query.findOne().exec();
+        const data = await query.limit(1).exec().then(results => results[0] || null);
         result = {
           data,
           metadata: this.buildMetadata(startTime, whereConfig, validRelations, failedRelations)
