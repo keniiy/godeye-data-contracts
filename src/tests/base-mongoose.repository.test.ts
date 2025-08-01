@@ -379,7 +379,7 @@ describe('BaseMongooseRepository', () => {
   describe('findById', () => {
     it('should find document by ID', async () => {
       const mockUser = { _id: '123', name: 'John', email: 'john@example.com', status: 'active' as const, createdAt: new Date() };
-      const mockQuery = createMockQuery(mockUser);
+      const mockQuery = createMockQuery([mockUser]); // Return as array since find() returns array
       MockModel.find.mockReturnValue(mockQuery);
 
       const whereConfig = { conditions: { status: 'active' } };
@@ -392,7 +392,7 @@ describe('BaseMongooseRepository', () => {
 
     it('should find document by ID with relations', async () => {
       const mockUser = { _id: '123', name: 'John', email: 'john@example.com', status: 'active' as const, createdAt: new Date() };
-      const mockQuery = createMockQuery(mockUser);
+      const mockQuery = createMockQuery([mockUser]); // Return as array since find() returns array
       MockModel.find.mockReturnValue(mockQuery);
 
       const whereConfig = { conditions: { status: 'active' } };
@@ -400,7 +400,9 @@ describe('BaseMongooseRepository', () => {
       
       await repository.findById('123', whereConfig, queryDto);
 
-      expect(mockQuery.populate).toHaveBeenCalledWith(['profile', 'business']);
+      // The buildDeepPopulateOptions method processes relations individually, returning arrays
+      expect(mockQuery.populate).toHaveBeenCalledWith(['profile']);
+      expect(mockQuery.populate).toHaveBeenCalledWith(['business']);
     });
   });
 
