@@ -445,6 +445,10 @@ describe('TypeORMAggregateRepository', () => {
 
   describe('Performance Metrics', () => {
     it('should log performance metrics for successful queries', async () => {
+      // Set NODE_ENV to development to trigger logging
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+      
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       mockQueryBuilder.getRawMany.mockResolvedValue([]);
 
@@ -456,6 +460,7 @@ describe('TypeORMAggregateRepository', () => {
       );
 
       consoleSpy.mockRestore();
+      process.env.NODE_ENV = originalEnv;
     });
   });
 });

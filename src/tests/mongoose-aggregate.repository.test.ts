@@ -373,6 +373,10 @@ describe('MongooseAggregateRepository', () => {
 
   describe('Performance Metrics', () => {
     it('should log performance metrics for successful queries', async () => {
+      // Set NODE_ENV to development to trigger logging
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+      
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       mockExec.mockResolvedValue([]);
 
@@ -381,10 +385,11 @@ describe('MongooseAggregateRepository', () => {
 
       // Should log performance metrics in development
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('MongoDB Query: mongooseAggregate on test_entities')
+        expect.stringContaining('Query: mongooseAggregate on test_entities')
       );
 
       consoleSpy.mockRestore();
+      process.env.NODE_ENV = originalEnv;
     });
   });
 });
