@@ -15,7 +15,7 @@ import {
   ApiCreatedResponse,
   getSchemaPath
 } from '@nestjs/swagger';
-import { optimizeDescription, DescriptionConfig } from './swagger';
+import { DescriptionConfig } from './swagger';
 
 // Interface for decorator options
 interface ApiOptions {
@@ -53,12 +53,8 @@ export function Api<T>(
     const defaultMessage = generateDefaultMessage(httpMethod, responseDto.name, isPaginated);
     const message = options.message || defaultMessage;
     
-    // Optimize description if enabled
-    let finalDescription = options.description;
-    if (options.optimizeDescription !== false && options.description) {
-      const optimized = optimizeDescription(options.description, options.descriptionConfig);
-      finalDescription = optimized.description;
-    }
+    // Keep full description - don't truncate for @Api decorator
+    const finalDescription = options.description;
 
     // Build decorators array
     const decorators = [

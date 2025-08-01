@@ -137,6 +137,7 @@ export function ApiResponse<T>(
   return applyDecorators(...decorators);
 }
 
+
 /**
  * Create success response schema with enhanced support for deeply populated responses
  */
@@ -156,15 +157,8 @@ function createSuccessResponseSchema<T>(dataType: Type<T>, description: string) 
         description: 'Human-readable message describing the result',
       },
       data: {
-        oneOf: [
-          { $ref: getSchemaPath(dataType) },
-          { 
-            type: 'object',
-            description: 'Deeply populated response with nested relations',
-            additionalProperties: true
-          }
-        ],
-        description: 'Response data payload with optional deep population of nested relations',
+        $ref: getSchemaPath(dataType),
+        description: 'Response data payload',
       },
       status_code: {
         type: 'number',
@@ -173,22 +167,22 @@ function createSuccessResponseSchema<T>(dataType: Type<T>, description: string) 
       },
       time_ms: {
         type: 'number',
-        example: 150,
+        example: 45,
         description: 'Request processing time in milliseconds',
       },
       timestamp: {
         type: 'string',
-        example: '2025-07-29T10:30:00.000Z',
+        example: '2025-08-01T10:30:00.000Z',
         description: 'ISO 8601 timestamp of the response',
       },
       trace_id: {
         type: 'string',
-        example: 'trace_1722164200000_abc123def',
+        example: 'trace_1725182200000_abc123def',
         description: 'Unique trace identifier for request tracking',
       },
       metadata: {
         type: 'object',
-        description: 'Performance and context metadata',
+        description: 'Performance and context metadata (optional)',
         nullable: true,
         properties: {
           ms_speed: { type: 'number', example: 45, description: 'Processing speed in milliseconds' },
@@ -196,16 +190,17 @@ function createSuccessResponseSchema<T>(dataType: Type<T>, description: string) 
           memory_used_mb: { type: 'number', example: 128.4, description: 'Memory usage in MB' },
           heap_used_mb: { type: 'number', example: 64.2, description: 'Heap memory usage in MB' },
           cache_hit: { type: 'boolean', example: true, description: 'Whether cache was hit' },
-          query_depth: { type: 'number', example: 3, description: 'Depth of nested queries/populations' },
-          relations_populated: { 
-            type: 'array', 
-            items: { type: 'string' }, 
-            example: ['user', 'user.profile', 'comments.author'],
+          query_depth: { type: 'number', example: 1, description: 'Depth of nested queries/populations' },
+          relations_populated: {
+            type: 'array',
+            items: { type: 'string' },
+            example: [],
             description: 'List of populated relations in deeply nested responses'
           },
+          total_queries: { type: 'number', example: 1, description: 'Total number of database queries executed' },
         },
       },
-    },
+    }
   };
 }
 
@@ -229,17 +224,8 @@ function createPaginatedResponseSchema<T>(dataType: Type<T>, description: string
       },
       data: {
         type: 'array',
-        items: {
-          oneOf: [
-            { $ref: getSchemaPath(dataType) },
-            { 
-              type: 'object',
-              description: 'Deeply populated item with nested relations',
-              additionalProperties: true
-            }
-          ]
-        },
-        description: 'Array of data items with optional deep population of nested relations',
+        items: { $ref: getSchemaPath(dataType) },
+        description: 'Array of data items',
       },
       status_code: {
         type: 'number',
@@ -317,7 +303,7 @@ function createPaginatedResponseSchema<T>(dataType: Type<T>, description: string
           total_queries: { type: 'number', example: 3, description: 'Total number of database queries executed' },
         },
       },
-    },
+    }
   };
 }
 
