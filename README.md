@@ -1,4 +1,4 @@
-# @kenniy/godeye-data-contracts
+# @kenniy/godeye-data-contracts v1.2.5
 
 [![npm version](https://badge.fury.io/js/@kenniy%2Fgodeye-data-contracts.svg)](https://badge.fury.io/js/@kenniy%2Fgodeye-data-contracts)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -9,28 +9,57 @@
 **Zero runtime overhead. Maximum code reuse. Enterprise-ready performance.**
 
 Eliminates 82.5% of repository repetition across TypeORM and Mongoose services with:
+
 - **WhereConfig Pattern**: Clean separation of backend control and frontend requests
 - **Intelligent Search**: Multi-algorithm fuzzy search with typo tolerance  
 - **Auto-Response Detection**: ResponseFactory automatically formats pagination/array/single entity
 - **Graceful Error Handling**: Relations fail silently with detailed metadata
 - **Performance Monitoring**: Built-in query timing and metrics
+- **Enhanced Swagger UI**: Smart documentation with description optimization
+- **Deep Relations**: Nested population with dot notation support
+
+## 📖 Quick Navigation
+
+- [🚀 Quick Start](#-quick-start) - Get up and running in minutes
+- [⚡ Core Pattern](#-core-pattern---whereconfig--querydto) - WhereConfig implementation  
+- [🔍 Search Features](#-intelligent-search-features) - Multi-algorithm search strategies
+- [📚 Complete Documentation](#-complete-documentation) - All docs, examples, and guides
+- [🔄 What's New](#-whats-new-in-v125) - Latest v1.2.5 features
 
 ## 🚀 Quick Start
 
 ```bash
-npm install @kenniy/godeye-data-contracts
+npm install @kenniy/godeye-data-contracts@1.2.5
 # or
-pnpm add @kenniy/godeye-data-contracts
+pnpm add @kenniy/godeye-data-contracts@1.2.5
 ```
 
 ```typescript
-import { 
-  BaseTypeORMRepository, 
+import {
+  BaseTypeORMRepository,
   FindManyDto,
   IWhereConfig,
   SearchStrategy,
-  ResponseFactory 
+  ResponseFactory,
+  bootstrap
 } from '@kenniy/godeye-data-contracts';
+```
+
+### Bootstrap Your Service
+
+```typescript
+// One-line service setup with enhanced Swagger
+const app = await bootstrap(AppModule, {
+  serviceName: 'my-service',
+  port: 3003,
+  enableSwagger: true,
+  swaggerConfig: {
+    title: 'My Service API',
+    description: 'Complete API documentation',
+    maxDisplayRequestSize: 10000,
+    maxDisplayResponseSize: 10000
+  }
+});
 ```
 
 ## ⚡ Core Pattern - WhereConfig + QueryDto
@@ -44,9 +73,9 @@ export class UsersController {
   async getUsers(@Query() queryDto: FindManyDto) {
     // Backend defines search intelligence and conditions
     const whereConfig: IWhereConfig = {
-      conditions: { 
-        status: 'active', 
-        isDeleted: false 
+      conditions: {
+        status: 'active',
+        isDeleted: false
       },
       searchConfig: [
         {
@@ -57,10 +86,10 @@ export class UsersController {
         }
       ]
     };
-    
+
     // Clean separation: backend config + frontend request
     const result = await this.userRepository.findWithPagination(whereConfig, queryDto);
-    
+
     // Auto-detects format (pagination/array/single)
     return ResponseFactory.success(result);
   }
@@ -138,14 +167,14 @@ const result = await userRepository.findWithPagination(whereConfig, queryDto);
 ```
 
 ### 2. Single Entity
-```typescript  
+```typescript
 const user = await userRepository.findById(id, whereConfig, queryDto);
 // Returns: { data: {...}, metadata: {...} }
 ```
 
 ### 3. Array Search
 ```typescript
-const users = await userRepository.find(whereConfig, queryDto);  
+const users = await userRepository.find(whereConfig, queryDto);
 // Returns: { items: [...], metadata: {...} }
 ```
 
@@ -171,15 +200,13 @@ export class UserRepository extends BaseMongooseRepository<User> {
 }
 ```
 
-## 📋 Complete Examples
+## 📋 Quick Examples
 
-Check out these comprehensive examples:
+See comprehensive examples in the [Implementation Examples](#implementation-examples-examples) section below, or jump directly to:
 
-- **[Complete Max Usage](./examples/complete-max-usage.md)** - Full flow with all features
-- **[Basic ICriteria Usage](./examples/basic-icriteria-usage.md)** - Simple queries  
-- **[Deep Relations Usage](./examples/deep-relations-usage.md)** - Nested population
-- **[DTO Usage](./examples/dto-usage.md)** - Frontend integration
-- **[Response Usage](./examples/simple-response-usage.md)** - ResponseFactory patterns
+- [Complete Max Usage](./examples/complete-max-usage.md) for full feature demonstration
+- [Bootstrap Usage](./examples/bootstrap-usage.md) for quick service setup
+- [Complete Documentation](#-complete-documentation) for all guides
 
 ## 🚦 Response Factory Auto-Detection
 
@@ -194,7 +221,7 @@ ResponseFactory.success({
   limit: 20
 });
 
-// Single entity → Entity response  
+// Single entity → Entity response
 ResponseFactory.success({
   data: { id: "123", name: "John" },
   metadata: { queryTime: "12ms" }
@@ -209,18 +236,20 @@ ResponseFactory.success({
 
 ## 🎯 Key Benefits
 
-✅ **Frontend Simplicity**: Just `search`, `include`, `page`, `limit`  
-✅ **Backend Control**: Full algorithm and condition control  
-✅ **Auto-Population**: Deep relations with graceful error handling  
-✅ **Performance**: Optimized queries with monitoring  
-✅ **Type Safety**: Full TypeScript support  
-✅ **Universal**: Works with TypeORM and Mongoose  
-✅ **Enterprise Ready**: Error handling, logging, metrics  
+- **Frontend Simplicity**: Just `search`, `include`, `page`, `limit`  
+- **Backend Control**: Full algorithm and condition control
+- **Auto-Population**: Deep relations with graceful error handling
+- **Performance**: Optimized queries with monitoring
+- **Type Safety**: Full TypeScript support
+- **Universal**: Works with TypeORM and Mongoose
+- **Enterprise Ready**: Error handling, logging, metrics
+- **Enhanced Swagger**: Smart documentation with description optimization
+- **Aggregate Queries**: Replace 3-5 database calls with single optimized query
 
 ## 📊 Performance
 
 - **Query Optimization**: ~10-20ms for complex searches
-- **Parallel Execution**: Count and data queries run in parallel  
+- **Parallel Execution**: Count and data queries run in parallel
 - **Relation Validation**: Auto-discovery prevents invalid JOINs
 - **Memory Efficient**: Optimized query builders
 - **Monitoring**: Built-in performance tracking
@@ -241,7 +270,7 @@ const whereConfig: IWhereConfig = {
 };
 ```
 
-### Custom Search Fields  
+### Custom Search Fields
 ```typescript
 searchConfig: [
   {
@@ -253,7 +282,7 @@ searchConfig: [
   {
     field: "skills",
     isArray: true,
-    defaultStrategy: SearchStrategy.CONTAINS, 
+    defaultStrategy: SearchStrategy.CONTAINS,
     priority: 7,
     weight: 0.7
   }
@@ -274,6 +303,31 @@ const whereConfig = { conditions: { status: 'active' } };
 return repository.findWithPagination(whereConfig, queryDto);
 ```
 
+## 📚 Complete Documentation
+
+### Core Documentation (`/docs`)
+
+- **[Documentation Overview](./docs/README.md)** - Complete documentation index
+- **[API Reference](./docs/API-REFERENCE.md)** - All classes, methods, interfaces, and types
+- **[Migration Guide](./docs/MIGRATION-GUIDE.md)** - Version upgrades and pattern migrations  
+- **[Best Practices](./docs/BEST-PRACTICES.md)** - Enterprise implementation patterns
+- **[Troubleshooting](./docs/TROUBLESHOOTING.md)** - Solutions for common issues
+
+### Implementation Examples (`/examples`)
+
+- **[Complete Max Usage](./examples/complete-max-usage.md)** - Full flow with all features
+- **[Aggregate Usage](./examples/aggregate-usage.md)** - Replace multiple queries with single aggregation
+- **[Bootstrap Usage](./examples/bootstrap-usage.md)** - 30-second service setup guide
+- **[Kong Gateway Usage](./examples/kong-usage.md)** - API Gateway integration patterns
+- **[Smart API Usage](./examples/smart-api-usage.md)** - Automated Swagger documentation
+- **[DTO Usage](./examples/dto-usage.md)** - Frontend integration patterns
+- **[Validation Pipeline Usage](./examples/validation-pipeline-usage.md)** - Input validation strategies
+
+### Performance & Testing
+
+- **[Performance Benchmarks](./performance/benchmark-results.md)** - Enterprise-grade performance analysis
+- **[Test Documentation](./src/tests/README.md)** - 167 comprehensive tests coverage
+
 ## 🧪 Testing
 
 The package includes comprehensive tests demonstrating all functionality:
@@ -281,6 +335,27 @@ The package includes comprehensive tests demonstrating all functionality:
 ```bash
 npm test
 ```
+
+## 🔄 What's New in v1.2.5
+
+### Enhanced Swagger UI
+
+- Smart description truncation with external doc linking
+- Custom CSS and responsive design improvements  
+- Dynamic service titles and enhanced navigation
+- Configurable display limits for better performance
+
+### Deep Population Support
+
+- Enhanced schemas for deeply nested objects
+- Rich metadata tracking for performance analysis
+- Support for complex populated responses
+
+### Description Optimization
+
+- Intelligent truncation respects sentence boundaries
+- External documentation integration
+- Cleaner API documentation
 
 ## 📄 License
 
