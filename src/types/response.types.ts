@@ -34,14 +34,53 @@ export interface IPaginatedResult<T> {
   hasPrev: boolean;
 }
 
+// Standardized paginated data structure
+export interface IPaginatedData<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
 /**
- * Specific metadata contexts - No more vague metadata!
+ * Enhanced metadata contexts for comprehensive API response information
  */
 export interface IResponseMetadata {
-  // Database operation context
+  // Query performance
+  queryTime?: string; // Query execution time (e.g., "120ms")
   ms_speed?: number; // Query execution time in milliseconds
   affected_rows?: number; // Rows affected by operation
   cache_hit?: boolean; // Whether result came from cache
+  cacheStatus?: 'hit' | 'miss' | 'bypass'; // Cache status
+  lastUpdated?: string; // Last update timestamp
+
+  // Search and filtering capabilities
+  searchAlgorithms?: string[]; // Search algorithms used ["fuzzy", "exact", "contains"]
+  backendConditions?: string[]; // Backend applied conditions ["status", "isDeleted"]
+  relationsLoaded?: string[]; // Relations loaded ["profile", "business.owner"]
+  relationErrors?: string[]; // Any relation loading errors
+
+  // Aggregation and count data
+  activeCount?: number; // Active items count
+  pendingCount?: number; // Pending items count
+  suspendedCount?: number; // Suspended items count
+  totalCount?: number; // Total items across all statuses
+
+  // Filtering metadata
+  filters?: {
+    appliedFilters?: string[]; // Currently applied filters
+    availableFilters?: string[]; // Available filter options
+  };
+
+  // Sorting metadata
+  sorting?: {
+    sortBy?: string; // Current sort field
+    sortOrder?: 'asc' | 'desc'; // Sort direction
+    availableSorts?: string[]; // Available sort fields
+  };
 
   // System performance data
   cpu_usage_percent?: number; // Current CPU usage percentage

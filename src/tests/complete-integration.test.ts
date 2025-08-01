@@ -71,7 +71,7 @@ describe("Complete Integration Test", () => {
       const response = ResponseFactory.success(paginatedUsers);
 
       expect(response.success).toBe(true);
-      expect(response.data).toEqual(paginatedUsers.items);
+      expect((response.data as any).items).toEqual(paginatedUsers.items);
       expect(response.pagination).toMatchObject({
         total: 50,
         page: 2,
@@ -91,7 +91,7 @@ describe("Complete Integration Test", () => {
         limit: 10,
       };
       const dataResponse = ResponseFactory.success(dataFormat);
-      expect(dataResponse.data).toEqual([{ id: "1" }]);
+      expect((dataResponse.data as any).items).toEqual([{ id: "1" }]);
       expect(dataResponse.pagination?.total).toBe(5);
 
       // Test 'results' format
@@ -100,7 +100,7 @@ describe("Complete Integration Test", () => {
         count: 3,
       };
       const resultsResponse = ResponseFactory.success(resultsFormat);
-      expect(resultsResponse.data).toEqual([{ id: "2" }]);
+      expect((resultsResponse.data as any).items).toEqual([{ id: "2" }]);
       expect(resultsResponse.pagination?.total).toBe(3);
     });
   });

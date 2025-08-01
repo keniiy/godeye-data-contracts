@@ -31,7 +31,13 @@ describe('ResponseFactory', () => {
       const response = ResponseFactory.success(paginatedData);
 
       expect(response.success).toBe(true);
-      expect(response.data).toEqual([{ id: '1' }, { id: '2' }]);
+      expect((response.data as any).items).toEqual([{ id: '1' }, { id: '2' }]);
+      expect((response.data as any).total).toBe(2);
+      expect((response.data as any).page).toBe(1);
+      expect((response.data as any).limit).toBe(10);
+      expect((response.data as any).totalPages).toBe(1);
+      expect((response.data as any).hasNext).toBe(false);
+      expect((response.data as any).hasPrev).toBe(false);
       expect(response.pagination).toBeDefined();
       expect(response.pagination?.total).toBe(2);
       expect(response.pagination?.page).toBe(1);
@@ -48,7 +54,13 @@ describe('ResponseFactory', () => {
 
       const response = ResponseFactory.success(paginatedData);
 
-      expect(response.data).toEqual([{ id: '1' }, { id: '2' }]);
+      expect((response.data as any).items).toEqual([{ id: '1' }, { id: '2' }]);
+      expect((response.data as any).total).toBe(5);
+      expect((response.data as any).page).toBe(2);
+      expect((response.data as any).limit).toBe(2);
+      expect((response.data as any).totalPages).toBe(3);
+      expect((response.data as any).hasNext).toBe(true);
+      expect((response.data as any).hasPrev).toBe(true);
       expect(response.pagination?.total).toBe(5);
       expect(response.pagination?.total_pages).toBe(3); // Math.ceil(5/2)
       expect(response.pagination?.has_next).toBe(true);
@@ -63,7 +75,13 @@ describe('ResponseFactory', () => {
 
       const response = ResponseFactory.success(paginatedData);
 
-      expect(response.data).toEqual([{ id: '1' }]);
+      expect((response.data as any).items).toEqual([{ id: '1' }]);
+      expect((response.data as any).total).toBe(1);
+      expect((response.data as any).page).toBe(1);
+      expect((response.data as any).limit).toBe(20);
+      expect((response.data as any).totalPages).toBe(1);
+      expect((response.data as any).hasNext).toBe(false);
+      expect((response.data as any).hasPrev).toBe(false);
       expect(response.pagination?.total).toBe(1);
       expect(response.pagination?.page).toBe(1); // Default
       expect(response.pagination?.limit).toBe(20); // Default
@@ -84,7 +102,13 @@ describe('ResponseFactory', () => {
       const response = ResponseFactory.paginated(items, 10, 2, 5);
 
       expect(response.success).toBe(true);
-      expect(response.data).toEqual(items);
+      expect((response.data as any).items).toEqual(items);
+      expect((response.data as any).total).toBe(10);
+      expect((response.data as any).page).toBe(2);
+      expect((response.data as any).limit).toBe(5);
+      expect((response.data as any).totalPages).toBe(2);
+      expect((response.data as any).hasNext).toBe(false);
+      expect((response.data as any).hasPrev).toBe(true);
       expect(response.pagination?.total).toBe(10);
       expect(response.pagination?.page).toBe(2);
       expect(response.pagination?.limit).toBe(5);

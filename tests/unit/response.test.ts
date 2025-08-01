@@ -95,7 +95,15 @@ describe('ResponseFactory', () => {
 
       expect(response).toEqual({
         success: true,
-        data: items,
+        data: {
+          items: items,
+          total: 10,
+          page: 1,
+          limit: 2,
+          totalPages: 5,
+          hasNext: true,
+          hasPrev: false,
+        },
         message: 'Items retrieved',
         status_code: 200,
         time_ms: expect.any(Number),
