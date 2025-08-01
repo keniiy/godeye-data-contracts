@@ -27,12 +27,33 @@ curl -X POST http://localhost:8001/services/user-service/routes \
 # Access via Kong (port 8000)
 curl http://localhost:8000/api/users
 
-# Returns ResponseFactory format:
+# Returns ResponseFactory format with new standardized structure:
 {
   "success": true,
-  "data": [...],
+  "data": {
+    "items": [...],
+    "total": 25,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 3,
+    "hasNext": true,
+    "hasPrev": false
+  },
   "message": "Users retrieved successfully",
-  "status_code": 200
+  "status_code": 200,
+  "time_ms": 120,
+  "timestamp": "2025-08-01T10:30:00.000Z",
+  "trace_id": "trace_1722164200000_abc123",
+  "metadata": {
+    "queryTime": "120ms",
+    "searchAlgorithms": ["fuzzy", "exact"],
+    "backendConditions": ["status", "isDeleted"],
+    "relationsLoaded": ["business", "profile"],
+    "activeCount": 20,
+    "pendingCount": 3,
+    "suspendedCount": 2,
+    "cacheStatus": "hit"
+  }
 }
 ```
 
@@ -108,7 +129,7 @@ import { IKongUserContext } from '@kenniy/godeye-data-contracts';
 @ApiTags('Users')
 @UseGuards(KongAuthGuard) // Enable Kong auth for all routes
 export class UserController {
-  
+
   @Get('profile')
   @Api(UserResponseDto)
   async getProfile(@KongUser() user: IKongUserContext) {
@@ -135,7 +156,7 @@ curl http://localhost:8000/api/users/profile \
 
 # Kong Gateway forwards with:
 # x-user-id: "123"
-# x-user-email: "user@example.com" 
+# x-user-email: "user@example.com"
 # x-user-type: "patient,admin"
 # x-user-profile-id: "profile-456"
 ```
@@ -147,7 +168,7 @@ curl http://localhost:8000/api/users/profile \
 ```bash
 # All requests go through Kong with JWT (port 8000)
 curl -H "Authorization: Bearer your-jwt-token" http://localhost:8000/api/users
-curl -H "Authorization: Bearer your-jwt-token" http://localhost:8000/api/hospitals  
+curl -H "Authorization: Bearer your-jwt-token" http://localhost:8000/api/hospitals
 curl -H "Authorization: Bearer your-jwt-token" http://localhost:8000/api/notifications
 ```
 

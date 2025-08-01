@@ -114,18 +114,30 @@ describe('GOD-EYE Data Contracts Package', () => {
         limit: 10
       };
       const paginatedResponse = ResponseFactory.success(paginatedData);
-      expect(paginatedResponse.pagination).toBeDefined();
-      expect(paginatedResponse.pagination?.total).toBe(2);
+
+      // Assert response structure
+      expect(paginatedResponse.success).toBe(true);
+      expect(paginatedResponse.data).toBeDefined();
+
+      // Type assertion for better TypeScript support - cast to IPaginatedData
+      const data = paginatedResponse.data as any;
+      expect(data.total).toBe(2);
+      expect(data.items).toHaveLength(2);
+      expect(data.page).toBe(1);
+      expect(data.limit).toBe(10);
+      expect(data.totalPages).toBe(1);
+      expect(data.hasNext).toBe(false);
+      expect(data.hasPrev).toBe(false);
     });
   });
 
   describe('Usage Guide Compliance', () => {
     it('should match bootstrap usage guide examples', () => {
       const { bootstrap } = DataContracts;
-      
+
       // Test that bootstrap accepts the expected parameters
       expect(typeof bootstrap).toBe('function');
-      
+
       // Mock module for testing
       const mockModule = {};
       const config = {
@@ -133,7 +145,7 @@ describe('GOD-EYE Data Contracts Package', () => {
         port: 3003,
         enableSwagger: true
       };
-      
+
       // This would normally start a server, so we just test structure
       expect(config.serviceName).toBe('test-service');
       expect(config.port).toBe(3003);
@@ -142,32 +154,32 @@ describe('GOD-EYE Data Contracts Package', () => {
 
     it('should match response factory usage guide examples', () => {
       const { ResponseFactory } = DataContracts;
-      
+
       // Test simple success
       const response = ResponseFactory.success({ id: '123', name: 'Test' });
       expect(response.success).toBe(true);
       expect(response.status_code).toBe(200);
-      
+
       // Test error responses
       const notFound = ResponseFactory.notFound('User not found');
       expect(notFound.status_code).toBe(404);
-      
+
       const serverError = ResponseFactory.serverError('Something went wrong');
       expect(serverError.status_code).toBe(500);
     });
 
     it('should match validation usage guide examples', () => {
       const { ValidationUtils } = DataContracts;
-      
+
       // UUID validation
       expect(ValidationUtils.isValidId('550e8400-e29b-41d4-a716-446655440000')).toBe(true);
-      
-      // ObjectId validation  
+
+      // ObjectId validation
       expect(ValidationUtils.isValidId('507f1f77bcf86cd799439011')).toBe(true);
-      
+
       // Numeric ID validation
       expect(ValidationUtils.isValidId('12345')).toBe(true);
-      
+
       // Email validation
       expect(ValidationUtils.isValidEmail('test@example.com')).toBe(true);
       expect(ValidationUtils.isValidEmail('invalid-email')).toBe(false);

@@ -1,6 +1,6 @@
 /**
  * Smart API Response Decorator
- * 
+ *
  * One intelligent decorator that handles everything:
  * - Auto-detects pagination vs single response
  * - Auto-detects HTTP status codes from method
@@ -8,16 +8,16 @@
  * - Allows custom error additions
  */
 
-import { applyDecorators, Type } from '@nestjs/common';
-import { 
-  ApiResponse, 
+import { applyDecorators, Type } from "@nestjs/common";
+import {
+  ApiResponse,
   ApiOkResponse,
   ApiCreatedResponse,
   ApiOperation,
   ApiExtraModels,
-  getSchemaPath
-} from '@nestjs/swagger';
-import { DescriptionConfig } from './swagger';
+  getSchemaPath,
+} from "@nestjs/swagger";
+import { DescriptionConfig } from "./swagger";
 
 // Interface for decorator options
 interface ApiOptions {
@@ -36,57 +36,63 @@ interface ApiOptions {
  * Smart API Decorator - One decorator to rule them all!
  * Auto-detects everything and applies appropriate documentation
  */
-export function Api<T>(
-  responseDto: Type<T>, 
-  options: ApiOptions = {}
-) {
+export function Api<T>(responseDto: Type<T>, options: ApiOptions = {}) {
   return (target: any, propertyKey: string, descriptor: PropertyDescriptor) => {
     // Auto-detect HTTP method and status
     const httpMethod = getHttpMethodFromDecorators(target, propertyKey);
     const defaultStatus = getDefaultStatusCode(httpMethod);
     const status = options.status || defaultStatus;
-    
+
     // Auto-detect if this is likely a paginated response
-    const isPaginated = options.paginated !== undefined 
-      ? options.paginated 
-      : isPaginatedEndpoint(propertyKey);
-    
+    const isPaginated =
+      options.paginated !== undefined
+        ? options.paginated
+        : isPaginatedEndpoint(propertyKey);
+
     // Auto-generate message
-    const defaultMessage = generateDefaultMessage(httpMethod, responseDto.name, isPaginated);
+    const defaultMessage = generateDefaultMessage(
+      httpMethod,
+      responseDto.name,
+      isPaginated
+    );
     const message = options.message || defaultMessage;
-    
+
     // Keep full description - don't truncate for @Api decorator
     const finalDescription = options.description;
 
     // Build decorators array
     const decorators = [];
-    
+
     // Add the DTO to extra models for proper schema generation
     decorators.push(ApiExtraModels(responseDto));
-    
+
     // Add operation description at the operation level (not in response)
     if (finalDescription) {
       decorators.push(
         ApiOperation({
           summary: message,
-          description: finalDescription
+          description: finalDescription,
         })
       );
     }
-    
+
     // Success response (with simple message, not full description)
-    decorators.push(buildSuccessResponse(responseDto, message, status, isPaginated));
-    
+    decorators.push(
+      buildSuccessResponse(responseDto, message, status, isPaginated)
+    );
+
     // Common errors (unless excluded)
     if (!options.excludeCommonErrors) {
       decorators.push(buildCommonErrors());
     }
-    
+
     // Custom errors
     if (options.errors) {
-      decorators.push(...options.errors.map(errorCode => buildCustomError(errorCode)));
+      decorators.push(
+        ...options.errors.map((errorCode) => buildCustomError(errorCode))
+      );
     }
-    
+
     return applyDecorators(...decorators)(target, propertyKey, descriptor);
   };
 }
@@ -95,20 +101,30 @@ export function Api<T>(
  * Auto-detect HTTP method from NestJS decorators
  */
 function getHttpMethodFromDecorators(target: any, propertyKey: string): string {
-  const metadata = Reflect.getMetadata('method', target[propertyKey]) ||
-                   Reflect.getMetadata('path', target[propertyKey]);
-  
+  const metadata =
+    Reflect.getMetadata("method", target[propertyKey]) ||
+    Reflect.getMetadata("path", target[propertyKey]);
+
   // Check for common HTTP method decorators
-  if (Reflect.getMetadata('__httpCode__', target[propertyKey]) === 201) return 'POST';
-  
+  if (Reflect.getMetadata("__httpCode__", target[propertyKey]) === 201)
+    return "POST";
+
   // Analyze method name patterns
   const methodName = propertyKey.toLowerCase();
-  if (methodName.startsWith('create') || methodName.startsWith('add')) return 'POST';
-  if (methodName.startsWith('update') || methodName.startsWith('edit')) return 'PUT';
-  if (methodName.startsWith('delete') || methodName.startsWith('remove')) return 'DELETE';
-  if (methodName.startsWith('get') || methodName.startsWith('find') || methodName.startsWith('fetch')) return 'GET';
-  
-  return 'GET'; // Default fallback
+  if (methodName.startsWith("create") || methodName.startsWith("add"))
+    return "POST";
+  if (methodName.startsWith("update") || methodName.startsWith("edit"))
+    return "PUT";
+  if (methodName.startsWith("delete") || methodName.startsWith("remove"))
+    return "DELETE";
+  if (
+    methodName.startsWith("get") ||
+    methodName.startsWith("find") ||
+    methodName.startsWith("fetch")
+  )
+    return "GET";
+
+  return "GET"; // Default fallback
 }
 
 /**
@@ -116,13 +132,13 @@ function getHttpMethodFromDecorators(target: any, propertyKey: string): string {
  */
 function getDefaultStatusCode(httpMethod: string): number {
   const statusMap: Record<string, number> = {
-    'POST': 201,
-    'PUT': 200,
-    'DELETE': 200,
-    'GET': 200,
-    'PATCH': 200
+    POST: 201,
+    PUT: 200,
+    DELETE: 200,
+    GET: 200,
+    PATCH: 200,
   };
-  
+
   return statusMap[httpMethod] || 200;
 }
 
@@ -131,40 +147,52 @@ function getDefaultStatusCode(httpMethod: string): number {
  */
 function isPaginatedEndpoint(methodName: string): boolean {
   const paginatedPatterns = [
-    'getall', 'findall', 'fetchall',
-    'list', 'search', 'filter',
-    'getmany', 'findmany', 'fetchmany',
-    'get' + 's', 'find' + 's' // getUsers, findUsers, etc.
+    "getall",
+    "findall",
+    "fetchall",
+    "list",
+    "search",
+    "filter",
+    "getmany",
+    "findmany",
+    "fetchmany",
+    "get" + "s",
+    "find" + "s", // getUsers, findUsers, etc.
   ];
-  
+
   const lowerName = methodName.toLowerCase();
-  return paginatedPatterns.some(pattern => 
-    lowerName.includes(pattern) || 
-    lowerName.endsWith('s') || 
-    lowerName.includes('list') ||
-    lowerName.includes('search')
+  return paginatedPatterns.some(
+    (pattern) =>
+      lowerName.includes(pattern) ||
+      lowerName.endsWith("s") ||
+      lowerName.includes("list") ||
+      lowerName.includes("search")
   );
 }
 
 /**
  * Generate smart default message
  */
-function generateDefaultMessage(httpMethod: string, dtoName: string, isPaginated: boolean): string {
-  const entityName = dtoName.replace('ResponseDto', '').replace('Dto', '');
-  const entityPlural = entityName.toLowerCase() + 's';
+function generateDefaultMessage(
+  httpMethod: string,
+  dtoName: string,
+  isPaginated: boolean
+): string {
+  const entityName = dtoName.replace("ResponseDto", "").replace("Dto", "");
+  const entityPlural = entityName.toLowerCase() + "s";
   const entitySingular = entityName.toLowerCase();
-  
+
   switch (httpMethod) {
-    case 'POST':
+    case "POST":
       return `${entityName} created successfully`;
-    case 'PUT':
-    case 'PATCH':
+    case "PUT":
+    case "PATCH":
       return `${entityName} updated successfully`;
-    case 'DELETE':
+    case "DELETE":
       return `${entityName} deleted successfully`;
-    case 'GET':
+    case "GET":
     default:
-      return isPaginated 
+      return isPaginated
         ? `${entityPlural} retrieved successfully`
         : `${entityName} found`;
   }
@@ -180,53 +208,117 @@ function buildSuccessResponse<T>(
   isPaginated: boolean
 ) {
   const ResponseDecorator = status === 201 ? ApiCreatedResponse : ApiOkResponse;
-  
+
   if (isPaginated) {
     return ResponseDecorator({
       description: message, // Use simple message, not full description
       schema: {
-        type: 'object',
+        type: "object",
         properties: {
-          success: { type: 'boolean', example: true },
+          success: { type: "boolean", example: true },
           data: {
-            type: 'array',
-            items: { $ref: getSchemaPath(responseDto) }
-          },
-          message: { type: 'string', example: message },
-          status_code: { type: 'number', example: status },
-          time_ms: { type: 'number', example: 120 },
-          timestamp: { type: 'string', example: '2024-01-15T10:30:00.000Z' },
-          trace_id: { type: 'string', example: 'trace_1705312200000_abc123' },
-          pagination: {
-            type: 'object',
+            type: "object",
             properties: {
-              total: { type: 'number', example: 50 },
-              page: { type: 'number', example: 1 },
-              limit: { type: 'number', example: 20 },
-              total_pages: { type: 'number', example: 3 },
-              has_next: { type: 'boolean', example: true },
-              has_prev: { type: 'boolean', example: false }
-            }
-          }
-        }
-      }
+              items: {
+                type: "array",
+                items: { $ref: getSchemaPath(responseDto) },
+              },
+              total: { type: "number", example: 50 },
+              page: { type: "number", example: 1 },
+              limit: { type: "number", example: 20 },
+              totalPages: { type: "number", example: 3 },
+              hasNext: { type: "boolean", example: true },
+              hasPrev: { type: "boolean", example: false },
+            },
+          },
+          message: { type: "string", example: message },
+          status_code: { type: "number", example: status },
+          time_ms: { type: "number", example: 120 },
+          timestamp: { type: "string", example: "2025-08-01T10:30:00.000Z" },
+          trace_id: { type: "string", example: "trace_1722164200000_abc123" },
+          metadata: {
+            type: "object",
+            nullable: true,
+            properties: {
+              queryTime: { type: "string", example: "120ms" },
+              searchAlgorithms: {
+                type: "array",
+                items: { type: "string" },
+                example: ["fuzzy", "exact"],
+              },
+              backendConditions: {
+                type: "array",
+                items: { type: "string" },
+                example: ["status", "isDeleted"],
+              },
+              relationsLoaded: {
+                type: "array",
+                items: { type: "string" },
+                example: ["business", "profile"],
+              },
+              activeCount: { type: "number", example: 15 },
+              pendingCount: { type: "number", example: 3 },
+              suspendedCount: { type: "number", example: 2 },
+              cacheStatus: { type: "string", example: "hit" },
+              ms_speed: { type: "number", example: 120 },
+              cpu_usage_percent: { type: "number", example: 45.2 },
+              memory_used_mb: { type: "number", example: 180.5 },
+            },
+          },
+        },
+      },
     });
   }
-  
+
   return ResponseDecorator({
     description: message, // Use simple message, not full description
     schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        success: { type: 'boolean', example: true },
+        success: { type: "boolean", example: true },
         data: { $ref: getSchemaPath(responseDto) }, // This should show DTO structure
-        message: { type: 'string', example: message },
-        status_code: { type: 'number', example: status },
-        time_ms: { type: 'number', example: 45 },
-        timestamp: { type: 'string', example: '2024-01-15T10:30:00.000Z' },
-        trace_id: { type: 'string', example: 'trace_1705312200000_xyz789' }
-      }
-    }
+        message: { type: "string", example: message },
+        status_code: { type: "number", example: status },
+        time_ms: { type: "number", example: 45 },
+        timestamp: { type: "string", example: "2025-08-01T10:30:00.000Z" },
+        trace_id: { type: "string", example: "trace_1722164200000_xyz789" },
+        metadata: {
+          type: "object",
+          nullable: true,
+          properties: {
+            queryTime: { type: "string", example: "45ms" },
+            searchAlgorithms: {
+              type: "array",
+              items: { type: "string" },
+              example: ["exact"],
+            },
+            backendConditions: {
+              type: "array",
+              items: { type: "string" },
+              example: ["status"],
+            },
+            relationsLoaded: {
+              type: "array",
+              items: { type: "string" },
+              example: ["profile"],
+            },
+            relationErrors: {
+              type: "array",
+              items: { type: "string" },
+              example: [],
+            },
+            cacheStatus: { type: "string", example: "hit" },
+            ms_speed: { type: "number", example: 45 },
+            cpu_usage_percent: { type: "number", example: 23.5 },
+            memory_used_mb: { type: "number", example: 128.4 },
+            lastUpdated: {
+              type: "string",
+              example: "2025-08-01T10:30:00.000Z",
+            },
+          },
+        },
+      },
+    },
   });
 }
 
@@ -237,77 +329,83 @@ function buildCommonErrors() {
   return applyDecorators(
     ApiResponse({
       status: 404,
-      description: 'Resource not found',
+      description: "Resource not found",
       schema: {
-        type: 'object',
+        type: "object",
         properties: {
-          success: { type: 'boolean', example: false },
-          error: { type: 'string', example: 'Not Found' },
-          message: { type: 'string', example: 'Resource not found' },
-          status_code: { type: 'number', example: 404 },
-          time_ms: { type: 'number', example: 25 },
-          timestamp: { type: 'string', example: '2024-01-15T10:30:00.000Z' },
-          trace_id: { type: 'string', example: 'trace_1705312200000_error456' }
-        }
-      }
+          success: { type: "boolean", example: false },
+          error: { type: "string", example: "Not Found" },
+          message: { type: "string", example: "Resource not found" },
+          status_code: { type: "number", example: 404 },
+          time_ms: { type: "number", example: 25 },
+          timestamp: { type: "string", example: "2025-08-01T10:30:00.000Z" },
+          trace_id: { type: "string", example: "trace_1722164200000_error456" },
+        },
+      },
     }),
     ApiResponse({
       status: 409,
-      description: 'Conflict - Resource already exists',
+      description: "Conflict - Resource already exists",
       schema: {
-        type: 'object',
+        type: "object",
         properties: {
-          success: { type: 'boolean', example: false },
-          error: { type: 'string', example: 'Conflict' },
-          message: { type: 'string', example: 'Resource already exists' },
-          status_code: { type: 'number', example: 409 },
-          time_ms: { type: 'number', example: 35 },
-          timestamp: { type: 'string', example: '2024-01-15T10:30:00.000Z' },
-          trace_id: { type: 'string', example: 'trace_1705312200000_conflict789' }
-        }
-      }
+          success: { type: "boolean", example: false },
+          error: { type: "string", example: "Conflict" },
+          message: { type: "string", example: "Resource already exists" },
+          status_code: { type: "number", example: 409 },
+          time_ms: { type: "number", example: 35 },
+          timestamp: { type: "string", example: "2025-08-01T10:30:00.000Z" },
+          trace_id: {
+            type: "string",
+            example: "trace_1722164200000_conflict789",
+          },
+        },
+      },
     }),
     ApiResponse({
       status: 422,
-      description: 'Validation Error',
+      description: "Validation Error",
       schema: {
-        type: 'object',
+        type: "object",
         properties: {
-          success: { type: 'boolean', example: false },
-          error: { type: 'string', example: 'Validation Error' },
-          message: { type: 'string', example: 'Validation failed' },
-          status_code: { type: 'number', example: 422 },
-          time_ms: { type: 'number', example: 45 },
-          timestamp: { type: 'string', example: '2024-01-15T10:30:00.000Z' },
-          trace_id: { type: 'string', example: 'trace_1705312200000_validation123' },
+          success: { type: "boolean", example: false },
+          error: { type: "string", example: "Validation Error" },
+          message: { type: "string", example: "Validation failed" },
+          status_code: { type: "number", example: 422 },
+          time_ms: { type: "number", example: 45 },
+          timestamp: { type: "string", example: "2025-08-01T10:30:00.000Z" },
+          trace_id: {
+            type: "string",
+            example: "trace_1722164200000_validation123",
+          },
           metadata: {
-            type: 'object',
+            type: "object",
             properties: {
               validation_errors: {
-                type: 'array',
-                items: { type: 'string' },
-                example: ['field is required', 'invalid format']
-              }
-            }
-          }
-        }
-      }
+                type: "array",
+                items: { type: "string" },
+                example: ["field is required", "invalid format"],
+              },
+            },
+          },
+        },
+      },
     }),
     ApiResponse({
       status: 500,
-      description: 'Internal server error',
+      description: "Internal server error",
       schema: {
-        type: 'object',
+        type: "object",
         properties: {
-          success: { type: 'boolean', example: false },
-          error: { type: 'string', example: 'Internal Server Error' },
-          message: { type: 'string', example: 'Something went wrong' },
-          status_code: { type: 'number', example: 500 },
-          time_ms: { type: 'number', example: 67 },
-          timestamp: { type: 'string', example: '2024-01-15T10:30:00.000Z' },
-          trace_id: { type: 'string', example: 'trace_1705312200000_error456' }
-        }
-      }
+          success: { type: "boolean", example: false },
+          error: { type: "string", example: "Internal Server Error" },
+          message: { type: "string", example: "Something went wrong" },
+          status_code: { type: "number", example: 500 },
+          time_ms: { type: "number", example: 67 },
+          timestamp: { type: "string", example: "2025-08-01T10:30:00.000Z" },
+          trace_id: { type: "string", example: "trace_1722164200000_error456" },
+        },
+      },
     })
   );
 }
@@ -317,34 +415,37 @@ function buildCommonErrors() {
  */
 function buildCustomError(statusCode: number) {
   const errorMessages: Record<number, { error: string; message: string }> = {
-    400: { error: 'Bad Request', message: 'Invalid request data' },
-    401: { error: 'Unauthorized', message: 'Authentication required' },
-    403: { error: 'Forbidden', message: 'Access denied' },
-    413: { error: 'Payload Too Large', message: 'Request payload too large' },
-    415: { error: 'Unsupported Media Type', message: 'Media type not supported' },
-    429: { error: 'Rate Limited', message: 'Rate limit exceeded' }
+    400: { error: "Bad Request", message: "Invalid request data" },
+    401: { error: "Unauthorized", message: "Authentication required" },
+    403: { error: "Forbidden", message: "Access denied" },
+    413: { error: "Payload Too Large", message: "Request payload too large" },
+    415: {
+      error: "Unsupported Media Type",
+      message: "Media type not supported",
+    },
+    429: { error: "Rate Limited", message: "Rate limit exceeded" },
   };
-  
-  const errorInfo = errorMessages[statusCode] || { 
-    error: 'Error', 
-    message: 'An error occurred' 
+
+  const errorInfo = errorMessages[statusCode] || {
+    error: "Error",
+    message: "An error occurred",
   };
-  
+
   return ApiResponse({
     status: statusCode,
     description: errorInfo.message,
     schema: {
-      type: 'object',
+      type: "object",
       properties: {
-        success: { type: 'boolean', example: false },
-        error: { type: 'string', example: errorInfo.error },
-        message: { type: 'string', example: errorInfo.message },
-        status_code: { type: 'number', example: statusCode },
-        time_ms: { type: 'number', example: 25 },
-        timestamp: { type: 'string', example: '2024-01-15T10:30:00.000Z' },
-        trace_id: { type: 'string', example: 'trace_1705312200000_custom456' }
-      }
-    }
+        success: { type: "boolean", example: false },
+        error: { type: "string", example: errorInfo.error },
+        message: { type: "string", example: errorInfo.message },
+        status_code: { type: "number", example: statusCode },
+        time_ms: { type: "number", example: 25 },
+        timestamp: { type: "string", example: "2025-08-01T10:30:00.000Z" },
+        trace_id: { type: "string", example: "trace_1722164200000_custom456" },
+      },
+    },
   });
 }
 
@@ -356,8 +457,8 @@ export function CommonApiErrors() {
 }
 
 export function ApiResponseWrapper<T>(
-  responseDto: Type<T>, 
-  message: string = 'Operation successful',
+  responseDto: Type<T>,
+  message: string = "Operation successful",
   statusCode: number = 200,
   description?: string
 ) {
@@ -366,7 +467,7 @@ export function ApiResponseWrapper<T>(
 
 export function ApiPaginatedWrapper<T>(
   responseDto: Type<T>,
-  message: string = 'Data retrieved successfully',
+  message: string = "Data retrieved successfully",
   description?: string
 ) {
   return Api(responseDto, { message, description, paginated: true });

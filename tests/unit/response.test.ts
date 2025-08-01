@@ -109,40 +109,35 @@ describe('ResponseFactory', () => {
         time_ms: expect.any(Number),
         timestamp: expect.any(String),
         trace_id: expect.any(String),
-        pagination: {
-          page: 1,
-          limit: 2,
-          total: 10,
-          total_pages: 5,
-          has_next: true,
-          has_prev: false,
-        },
+        metadata: undefined,
       });
     });
 
     it('should calculate pagination metadata correctly', () => {
       const response = ResponseFactory.paginated([], 25, 3, 5, 'Success');
 
-      expect(response.pagination).toEqual({
+      expect((response.data as any)).toEqual({
+        items: [],
         page: 3,
         limit: 5,
         total: 25,
-        total_pages: 5,
-        has_next: true,
-        has_prev: true,
+        totalPages: 5,
+        hasNext: true,
+        hasPrev: true,
       });
     });
 
     it('should handle last page correctly', () => {
       const response = ResponseFactory.paginated([], 10, 5, 2, 'Success');
 
-      expect(response.pagination).toEqual({
+      expect((response.data as any)).toEqual({
+        items: [],
         page: 5,
         limit: 2,
         total: 10,
-        total_pages: 5,
-        has_next: false,
-        has_prev: true,
+        totalPages: 5,
+        hasNext: false,
+        hasPrev: true,
       });
     });
   });

@@ -72,13 +72,14 @@ describe("Complete Integration Test", () => {
 
       expect(response.success).toBe(true);
       expect((response.data as any).items).toEqual(paginatedUsers.items);
-      expect(response.pagination).toMatchObject({
+      expect(response.data as any).toMatchObject({
+        items: paginatedUsers.items,
         total: 50,
         page: 2,
         limit: 20,
-        total_pages: 3,
-        has_next: true,
-        has_prev: true,
+        totalPages: 3,
+        hasNext: true,
+        hasPrev: true,
       });
     });
 
@@ -92,7 +93,7 @@ describe("Complete Integration Test", () => {
       };
       const dataResponse = ResponseFactory.success(dataFormat);
       expect((dataResponse.data as any).items).toEqual([{ id: "1" }]);
-      expect(dataResponse.pagination?.total).toBe(5);
+      expect((dataResponse.data as any).total).toBe(5);
 
       // Test 'results' format
       const resultsFormat = {
@@ -101,7 +102,7 @@ describe("Complete Integration Test", () => {
       };
       const resultsResponse = ResponseFactory.success(resultsFormat);
       expect((resultsResponse.data as any).items).toEqual([{ id: "2" }]);
-      expect(resultsResponse.pagination?.total).toBe(3);
+      expect((resultsResponse.data as any).total).toBe(3);
     });
   });
 
@@ -316,8 +317,8 @@ describe("Complete Integration Test", () => {
       };
 
       const paginatedResponse = ResponseFactory.success(usersList);
-      expect(paginatedResponse.pagination).toBeDefined();
-      expect(paginatedResponse.pagination?.total).toBe(1);
+      expect((paginatedResponse.data as any).items).toBeDefined();
+      expect((paginatedResponse.data as any).total).toBe(1);
     });
   });
 

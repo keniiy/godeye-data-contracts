@@ -599,12 +599,9 @@ describe('BaseMongooseRepository', () => {
         relations: ['profile', 'invalidRelation', 'business', 'anotherInvalid']
       });
 
-      // Should log warning for invalid relations
+      // Should log warning for invalid relations in the new format
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Unknown relations for users:")
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Available relations:")
+        expect.stringContaining("⚠️ Unknown relations for users: invalidRelation, anotherInvalid\n📋 Available:")
       );
 
       consoleSpy.mockRestore();
@@ -612,8 +609,10 @@ describe('BaseMongooseRepository', () => {
 
     it('should validate deep relation paths correctly', () => {
       expect((repository as any).isValidRelationPath('profile')).toBe(true);
+      // business.owner should be true since 'business' is a valid root relation
       expect((repository as any).isValidRelationPath('business.owner')).toBe(true);
       expect((repository as any).isValidRelationPath('invalidRelation')).toBe(false);
+      // invalid.deep should be false since 'invalid' is not a valid root relation  
       expect((repository as any).isValidRelationPath('invalid.deep')).toBe(false);
     });
 
@@ -629,14 +628,22 @@ describe('BaseMongooseRepository', () => {
     });
 
     it('should handle auto-discovery errors gracefully', () => {
-      // Mock model with broken schema
-      const originalSchema = MockModel.schema;
-      (MockModel as any).schema = null;
-      (repository as any).relationCache = null;
-      
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
       
-      const relations = (repository as any).getEntityRelations();
+      // Create a new repository instance to avoid cached relations
+      const brokenModel = { 
+        ...MockModel,
+        schema: null,
+        collection: { name: 'broken_test' },
+        modelName: 'BrokenTestModel'
+      };
+      const brokenRepository = new (class extends BaseMongooseRepository<any> {
+        constructor() {
+          super(brokenModel as any);
+        }
+      })();
+      
+      const relations = (brokenRepository as any).getEntityRelations();
       
       expect(relations).toEqual([]);
       expect(consoleSpy).toHaveBeenCalledWith(
@@ -645,9 +652,6 @@ describe('BaseMongooseRepository', () => {
       );
       
       consoleSpy.mockRestore();
-      
-      // Restore original schema
-      (MockModel as any).schema = originalSchema;
     });
   });
 });

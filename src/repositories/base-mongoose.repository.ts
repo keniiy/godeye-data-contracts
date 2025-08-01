@@ -233,6 +233,7 @@ export abstract class BaseMongooseRepository<T extends Document> {
       try {
         const schema = this.model.schema;
         if (!schema) {
+          console.warn(`Could not auto-discover relations for model ${this.collectionName}:`, 'Schema is null or undefined');
           const emptyResult: string[] = [];
           ULTRA_CACHE.setRelations(this.modelCacheKey, emptyResult);
           return emptyResult;
@@ -333,12 +334,7 @@ export abstract class BaseMongooseRepository<T extends Document> {
    * O(1) average case with Bloom Filter, O(k) worst case with Trie
    */
   protected isValidRelationPath(relationPath: string): boolean {
-    // Ultra-fast bloom filter check (O(1) probabilistic)
-    if (!ULTRA_CACHE.mightHaveRelation(this.modelCacheKey, relationPath)) {
-      return false; // Definitely not present
-    }
-
-    // Extract root relation with bit manipulation for speed
+    // Extract root relation first for deep relation handling
     let dotIndex = -1;
     for (let i = 0; i < relationPath.length; i++) {
       if (relationPath.charCodeAt(i) === 46) { // 46 = '.'
@@ -351,14 +347,17 @@ export abstract class BaseMongooseRepository<T extends Document> {
       ? relationPath.substring(0, dotIndex)
       : relationPath;
 
-    // Ultra-fast trie prefix check for complex paths
+    // Get known relations for validation
+    const knownRelations = this.getEntityRelations();
+    
+    // For deep relations (with dots), validate root relation exists
     if (dotIndex !== -1) {
-      return ULTRA_CACHE.hasRelationPrefix(this.modelCacheKey, rootRelation);
+      // Check if root relation exists in known relations
+      return knownRelations.includes(rootRelation);
     }
 
-    // Final verification with cached relations (already O(1) from ultra cache)
-    const knownRelations = this.getEntityRelations();
-    return knownRelations.includes(rootRelation);
+    // For direct relations, check exact match
+    return knownRelations.includes(relationPath);
   }
 
   /**

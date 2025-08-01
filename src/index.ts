@@ -1,6 +1,6 @@
 /**
  * @kenniy/godeye-data-contracts v1.0.0
- * 
+ *
  * GOD-EYE Data Contracts - Unified patterns for all microservices
  * Eliminates 98% code repetition across the ecosystem
  */
@@ -10,28 +10,37 @@
 // ============================================================================
 
 // Response Factory - Standardized responses with auto-detection
-export { ResponseFactory } from './core/response';
+export { ResponseFactory } from "./core/response";
 
 // Smart API Decorator - One decorator for all Swagger documentation
-export { Api, CommonApiErrors, ApiResponseWrapper, ApiPaginatedWrapper } from './core/swagger-decorators';
+export {
+  Api,
+  CommonApiErrors,
+  ApiResponseWrapper,
+  ApiPaginatedWrapper,
+} from "./core/swagger-decorators";
 
 // Swagger Utilities - Description optimization and enhanced documentation
-export { 
+export {
   ApiResponse,
   ApiResponseWithOptimizedDescription,
   optimizeDescription,
-  DescriptionConfig
-} from './core/swagger';
+  DescriptionConfig,
+} from "./core/swagger";
 
 // Bootstrap System - One-line service setup
-export { bootstrap, bootstrapGodsEyeApp, BootstrapConfig } from './setup/app.bootstrap';
+export {
+  bootstrap,
+  bootstrapGodsEyeApp,
+  BootstrapConfig,
+} from "./setup/app.bootstrap";
 
 // ============================================================================
 // VALIDATION SYSTEM - Universal validation across ORMs
 // ============================================================================
 
 // Validation Pipe & Decorators
-export { 
+export {
   ValidationPipe,
   IsValidId,
   IsRequiredEmail,
@@ -50,8 +59,8 @@ export {
   SearchDto,
   QueryDto,
   // Validation utilities
-  ValidationUtils
-} from './core/validation';
+  ValidationUtils,
+} from "./core/validation";
 
 // ============================================================================
 // KONG AUTHENTICATION - Gateway integration
@@ -64,23 +73,44 @@ export {
   createKongAuthGuard,
   RequireRoles,
   extractKongUserContext,
-  normalizeHeaders
-} from './core/auth';
+  normalizeHeaders,
+} from "./core/auth";
 
 // Auth Types
-export { IKongUserContext, IKongAuthConfig, IUserPermissions, IAuthGuardConfig } from './types/auth.types';
+export {
+  IKongUserContext,
+  IKongAuthConfig,
+  IUserPermissions,
+  IAuthGuardConfig,
+} from "./types/auth.types";
 
 // ============================================================================
 // REPOSITORY SYSTEM - Base classes & DTOs
 // ============================================================================
 
 // Base Repository Classes
-export { BaseTypeORMRepository } from './repositories/base-typeorm.repository';
-export { BaseMongooseRepository } from './repositories/base-mongoose.repository';
+export { BaseTypeORMRepository } from "./repositories/base-typeorm.repository";
+export { BaseMongooseRepository } from "./repositories/base-mongoose.repository";
 
 // Aggregate Repository Classes - Unified aggregation for both ORMs
-export { TypeORMAggregateRepository } from './repositories/typeorm-aggregate.repository';
-export { MongooseAggregateRepository } from './repositories/mongoose-aggregate.repository';
+export { TypeORMAggregateRepository } from "./repositories/typeorm-aggregate.repository";
+export { MongooseAggregateRepository } from "./repositories/mongoose-aggregate.repository";
+
+// Enhanced Aggregation Repository - BLAZING FAST next-generation algorithms
+export { EnhancedMongooseRepository } from "./repositories/enhanced-mongoose-aggregate.repository";
+
+// Enhanced Aggregation Utils - Adaptive query planning and optimization
+export {
+  EnhancedQueryConfig,
+  QueryMetrics,
+  EnhancedPaginatedResult,
+  AdaptiveQueryPlanner,
+  SmartCache,
+  PerformanceMonitor,
+  AggregationStrategy,
+  QueryOptimizationLevel,
+  AggregationStepType,
+} from "./utils/enhanced-aggregation.utils";
 
 // Aggregate Repository Interface & Types
 export {
@@ -90,8 +120,8 @@ export {
   AggregationConfig,
   PaginatedResult,
   AggregationPipeline,
-  QueryBuilderFunction
-} from './repositories/base-aggregate.repository';
+  QueryBuilderFunction,
+} from "./repositories/base-aggregate.repository";
 
 // Query DTOs with ICriteria transformation
 export {
@@ -99,15 +129,15 @@ export {
   FindOneDto,
   FindManyDto,
   UserQueryDto,
-  FileQueryDto
-} from './core/dto';
+  FileQueryDto,
+} from "./core/dto";
 
 // ============================================================================
 // TYPES & CONSTANTS - Complete type safety
 // ============================================================================
 
 // All types and interfaces
-export * from './types';
+export * from "./types";
 
 // All constants
-export * from './constants';
+export * from "./constants";

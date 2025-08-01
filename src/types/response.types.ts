@@ -11,7 +11,6 @@ export interface IResponse<T = any> {
   time_ms: number;
   timestamp: string;
   trace_id: string;
-  pagination?: IPagination;
   metadata?: IResponseMetadata;
 }
 
@@ -54,7 +53,7 @@ export interface IResponseMetadata {
   ms_speed?: number; // Query execution time in milliseconds
   affected_rows?: number; // Rows affected by operation
   cache_hit?: boolean; // Whether result came from cache
-  cacheStatus?: 'hit' | 'miss' | 'bypass'; // Cache status
+  cacheStatus?: "hit" | "miss" | "bypass"; // Cache status
   lastUpdated?: string; // Last update timestamp
 
   // Search and filtering capabilities
@@ -78,7 +77,7 @@ export interface IResponseMetadata {
   // Sorting metadata
   sorting?: {
     sortBy?: string; // Current sort field
-    sortOrder?: 'asc' | 'desc'; // Sort direction
+    sortOrder?: "asc" | "desc"; // Sort direction
     availableSorts?: string[]; // Available sort fields
   };
 
@@ -118,9 +117,9 @@ export interface IResponseMetadata {
  * Bulk operation enums and interfaces
  */
 export enum BulkOperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete'
+  CREATE = "create",
+  UPDATE = "update",
+  DELETE = "delete",
 }
 
 export interface IBulkOperation<T> {

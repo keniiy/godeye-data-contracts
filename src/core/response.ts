@@ -4,7 +4,10 @@ import {
   IResponseMetadata,
   IPaginatedData,
 } from "../types/response.types";
-import { buildBaseResponseMetadata, generateTraceId } from '../utils/response-builder.utils';
+import {
+  buildBaseResponseMetadata,
+  generateTraceId,
+} from "../utils/response-builder.utils";
 
 /**
  * ResponseFactory - Standardized response creation across all services
@@ -26,14 +29,15 @@ export class ResponseFactory {
     // Auto-detect if this is paginated data
     if (this.isPaginatedData(data)) {
       const paginatedData = data as any;
-      
+
       // Extract pagination data from various formats
-      const { items, total, page, limit } = this.extractPaginationData(paginatedData);
-      
+      const { items, total, page, limit } =
+        this.extractPaginationData(paginatedData);
+
       // Extract embedded metadata from repository result
       const embeddedMetadata = paginatedData.metadata || {};
       const combinedMetadata = { ...embeddedMetadata, ...metadata };
-      
+
       return this.paginated(
         items,
         total,
@@ -47,20 +51,30 @@ export class ResponseFactory {
 
     // Standard success response (single entity or array with embedded metadata)
     const baseMetadata = buildBaseResponseMetadata(start_time);
-    
+
     // Extract embedded metadata for single entity results
     let embeddedMetadata = {};
     let actualData = data;
-    if (data && typeof data === 'object' && 'data' in data && 'metadata' in data) {
+    if (
+      data &&
+      typeof data === "object" &&
+      "data" in data &&
+      "metadata" in data
+    ) {
       embeddedMetadata = (data as any).metadata || {};
       actualData = (data as any).data;
-    } else if (data && typeof data === 'object' && 'metadata' in data && !('items' in data)) {
+    } else if (
+      data &&
+      typeof data === "object" &&
+      "metadata" in data &&
+      !("items" in data)
+    ) {
       // Handle case where metadata is at root level but not pagination
       embeddedMetadata = (data as any).metadata || {};
       const { metadata: _, ...dataWithoutMetadata } = data as any;
       actualData = dataWithoutMetadata;
     }
-    
+
     const combinedMetadata = { ...embeddedMetadata, ...metadata };
 
     return {
@@ -107,14 +121,6 @@ export class ResponseFactory {
       message,
       status_code: 200,
       ...baseMetadata,
-      pagination: {
-        total,
-        page,
-        limit,
-        total_pages,
-        has_next,
-        has_prev,
-      },
       metadata,
     };
   }
@@ -262,32 +268,60 @@ export class ResponseFactory {
    * Supports multiple common pagination patterns
    */
   private static isPaginatedData(data: any): boolean {
-    if (!data || typeof data !== 'object') return false;
-    
+    if (!data || typeof data !== "object") return false;
+
     // Format 1: { items: [...], total: 50, page?: 1, limit?: 20 }
-    if ('items' in data && 'total' in data && 
-        Array.isArray(data.items) && typeof data.total === 'number') {
+    if (
+      "items" in data &&
+      "total" in data &&
+      Array.isArray(data.items) &&
+      typeof data.total === "number"
+    ) {
       return true;
     }
-    
+
     // Format 2: { data: [...], total: 50, page?: 1, limit?: 20 }
-    if ('data' in data && 'total' in data && 
-        Array.isArray(data.data) && typeof data.total === 'number') {
+    if (
+      "data" in data &&
+      "total" in data &&
+      Array.isArray(data.data) &&
+      typeof data.total === "number"
+    ) {
       return true;
     }
-    
+
     // Format 3: { results: [...], count: 50, page?: 1, limit?: 20 }
-    if ('results' in data && 'count' in data && 
-        Array.isArray(data.results) && typeof data.count === 'number') {
+    if (
+      "results" in data &&
+      "count" in data &&
+      Array.isArray(data.results) &&
+      typeof data.count === "number"
+    ) {
       return true;
     }
-    
+
     // Format 4: { rows: [...], totalCount: 50, page?: 1, limit?: 20 }
-    if ('rows' in data && 'totalCount' in data && 
-        Array.isArray(data.rows) && typeof data.totalCount === 'number') {
+    if (
+      "rows" in data &&
+      "totalCount" in data &&
+      Array.isArray(data.rows) &&
+      typeof data.totalCount === "number"
+    ) {
       return true;
     }
-    
+
+    // Format 5: { data: [...], pagination: { total: 50, page: 1, limit: 20, ... } }
+    if (
+      "data" in data &&
+      "pagination" in data &&
+      Array.isArray(data.data) &&
+      data.pagination &&
+      typeof data.pagination === "object" &&
+      typeof data.pagination.total === "number"
+    ) {
+      return true;
+    }
+
     return false;
   }
 
@@ -302,51 +336,61 @@ export class ResponseFactory {
     limit: number;
   } {
     // Format 1: { items: [...], total: 50, page?: 1, limit?: 20 }
-    if ('items' in data && 'total' in data) {
+    if ("items" in data && "total" in data) {
       return {
         items: data.items,
         total: data.total,
         page: data.page || 1,
-        limit: data.limit || 20
+        limit: data.limit || 20,
       };
     }
-    
+
     // Format 2: { data: [...], total: 50, page?: 1, limit?: 20 }
-    if ('data' in data && 'total' in data) {
+    if ("data" in data && "total" in data) {
       return {
         items: data.data,
         total: data.total,
         page: data.page || 1,
-        limit: data.limit || 20
+        limit: data.limit || 20,
       };
     }
-    
+
     // Format 3: { results: [...], count: 50, page?: 1, limit?: 20 }
-    if ('results' in data && 'count' in data) {
+    if ("results" in data && "count" in data) {
       return {
         items: data.results,
         total: data.count,
         page: data.page || 1,
-        limit: data.limit || 20
+        limit: data.limit || 20,
       };
     }
-    
+
     // Format 4: { rows: [...], totalCount: 50, page?: 1, limit?: 20 }
-    if ('rows' in data && 'totalCount' in data) {
+    if ("rows" in data && "totalCount" in data) {
       return {
         items: data.rows,
         total: data.totalCount,
         page: data.page || 1,
-        limit: data.limit || 20
+        limit: data.limit || 20,
       };
     }
-    
+
+    // Format 5: { data: [...], pagination: { total: 50, page: 1, limit: 20, ... } }
+    if ("data" in data && "pagination" in data && data.pagination) {
+      return {
+        items: data.data,
+        total: data.pagination.total,
+        page: data.pagination.page || 1,
+        limit: data.pagination.limit || 20,
+      };
+    }
+
     // Fallback (shouldn't happen if isPaginatedData works correctly)
     return {
       items: [],
       total: 0,
       page: 1,
-      limit: 20
+      limit: 20,
     };
   }
 
