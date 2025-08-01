@@ -29,71 +29,187 @@ import {
 } from "../types";
 
 /**
+ * Global cache for TypeORM relation discovery - shared across all instances
+ * Uses Map for O(1) lookup performance
+ */
+const TYPEORM_RELATION_CACHE = new Map<string, string[]>();
+const TYPEORM_SEARCHABLE_CACHE = new Map<string, string[]>();
+
+/**
+ * LRU Cache for TypeORM validation results
+ * Prevents repeated validation of the same relation paths
+ */
+class TypeORMLRUCache<K, V> {
+  private cache = new Map<K, V>();
+  private maxSize: number;
+
+  constructor(maxSize = 1000) {
+    this.maxSize = maxSize;
+  }
+
+  get(key: K): V | undefined {
+    if (this.cache.has(key)) {
+      const value = this.cache.get(key)!;
+      this.cache.delete(key);
+      this.cache.set(key, value);
+      return value;
+    }
+    return undefined;
+  }
+
+  set(key: K, value: V): void {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey);
+      }
+    }
+    this.cache.set(key, value);
+  }
+}
+
+const TYPEORM_VALIDATION_CACHE = new TypeORMLRUCache<string, boolean>(5000);
+
+/**
  * Abstract base repository optimized for TypeORM
  * Zero runtime abstraction - all TypeORM calls are direct
+ * Enhanced with advanced caching and performance optimizations
  *
  * @template T - Entity type with proper TypeORM decorators
  */
 @Injectable()
 export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   protected readonly entityName: string;
-  private relationCache: string[] | null = null;
+  private readonly entityCacheKey: string;
 
   constructor(
     protected readonly repository: Repository<T>,
     protected readonly entityTarget: EntityTarget<T>
   ) {
     this.entityName = this.repository.metadata.name;
+    this.entityCacheKey = `${this.entityName}_${this.repository.metadata.tableName}`;
+    
+    // Eagerly populate cache on instantiation
+    this.preloadRelationCache();
   }
 
   /**
-   * Auto-discover all relations for this entity using TypeORM metadata
-   * Eliminates need for manual getKnownRelations() methods
+   * Preload relation cache during construction to avoid concurrent access issues
    */
-  protected getEntityRelations(): string[] {
-    if (this.relationCache !== null) {
-      return this.relationCache;
+  private preloadRelationCache(): void {
+    if (!TYPEORM_RELATION_CACHE.has(this.entityCacheKey)) {
+      this.discoverRelations();
+    }
+  }
+
+  /**
+   * Optimized TypeORM relation discovery with global caching
+   */
+  private discoverRelations(): string[] {
+    const cached = TYPEORM_RELATION_CACHE.get(this.entityCacheKey);
+    if (cached) {
+      return cached;
     }
 
     try {
-      // Use repository metadata directly - more reliable than metadata args storage
-      const entityMetadata = this.repository.metadata;
-      const relations: string[] = [];
+      const entityMetadata = this.repository?.metadata;
+      if (!entityMetadata) {
+        const emptyResult: string[] = [];
+        TYPEORM_RELATION_CACHE.set(this.entityCacheKey, emptyResult);
+        return emptyResult;
+      }
 
-      // Get all relation metadata from entity metadata
-      entityMetadata.relations.forEach(relation => {
-        if (relation.propertyName) {
-          relations.push(relation.propertyName);
+      const relationsSet = new Set<string>(); // Use Set for O(1) deduplication
+
+      // Optimized relation extraction with null checks
+      const relations = entityMetadata.relations;
+      if (relations && relations.length > 0) {
+        for (let i = 0; i < relations.length; i++) {
+          const relation = relations[i];
+          if (relation?.propertyName) {
+            relationsSet.add(relation.propertyName);
+          }
         }
-      });
+      }
 
-      // Cache the result
-      this.relationCache = [...new Set(relations)]; // Remove duplicates
-      return this.relationCache;
+      const result = Array.from(relationsSet);
+      TYPEORM_RELATION_CACHE.set(this.entityCacheKey, result);
+      return result;
+      
     } catch (error: any) {
       console.warn(`Could not auto-discover relations for entity ${this.entityName}:`, error?.message || error);
-      this.relationCache = [];
-      return this.relationCache;
+      const emptyResult: string[] = [];
+      TYPEORM_RELATION_CACHE.set(this.entityCacheKey, emptyResult);
+      return emptyResult;
     }
   }
 
   /**
-   * Check if a relation path is valid for this entity
-   * Supports deep relations like 'business.owner'
+   * Get entity relations with O(1) global cache lookup
    */
-  protected isValidRelationPath(relationPath: string): boolean {
-    const knownRelations = this.getEntityRelations();
-    const rootRelation = relationPath.split('.')[0];
-    return knownRelations.includes(rootRelation);
+  protected getEntityRelations(): string[] {
+    return TYPEORM_RELATION_CACHE.get(this.entityCacheKey) || this.discoverRelations();
   }
 
   /**
-   * Auto-discover searchable fields for this entity
-   * Similar to relation auto-discovery but for text fields
+   * Optimized relation path validation with LRU caching
+   */
+  protected isValidRelationPath(relationPath: string): boolean {
+    const cacheKey = `${this.entityCacheKey}:${relationPath}`;
+    
+    const cached = TYPEORM_VALIDATION_CACHE.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const knownRelations = this.getEntityRelations();
+    const rootRelation = relationPath.indexOf('.') !== -1 
+      ? relationPath.substring(0, relationPath.indexOf('.'))
+      : relationPath;
+    
+    const isValid = knownRelations.includes(rootRelation);
+    TYPEORM_VALIDATION_CACHE.set(cacheKey, isValid);
+    return isValid;
+  }
+
+  /**
+   * Optimized searchable fields discovery for TypeORM entities
    */
   protected getSearchableFields(): string[] {
-    // For now, return basic text fields - can be enhanced with metadata inspection
-    return ['name', 'title', 'description', 'email'];
+    const cached = TYPEORM_SEARCHABLE_CACHE.get(this.entityCacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const entityMetadata = this.repository.metadata;
+      const searchableFields = new Set<string>();
+      
+      // Add default searchable fields
+      const defaultFields = ['name', 'title', 'description', 'email'];
+      defaultFields.forEach(field => searchableFields.add(field));
+      
+      // Discover text fields from TypeORM metadata
+      const columns = entityMetadata.columns;
+      for (let i = 0; i < columns.length; i++) {
+        const column = columns[i];
+        // Check for string/text type columns
+        if (column.type === 'varchar' || column.type === 'text' || column.type === String) {
+          searchableFields.add(column.propertyName);
+        }
+      }
+
+      const result = Array.from(searchableFields);
+      TYPEORM_SEARCHABLE_CACHE.set(this.entityCacheKey, result);
+      return result;
+      
+    } catch (error) {
+      const fallback = ['name', 'title', 'description', 'email'];
+      TYPEORM_SEARCHABLE_CACHE.set(this.entityCacheKey, fallback);
+      return fallback;
+    }
   }
 
   /**

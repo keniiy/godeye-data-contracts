@@ -15,6 +15,14 @@ export { ResponseFactory } from './core/response';
 // Smart API Decorator - One decorator for all Swagger documentation
 export { Api, CommonApiErrors, ApiResponseWrapper, ApiPaginatedWrapper } from './core/swagger-decorators';
 
+// Swagger Utilities - Description optimization and enhanced documentation
+export { 
+  ApiResponse,
+  ApiResponseWithOptimizedDescription,
+  optimizeDescription,
+  DescriptionConfig
+} from './core/swagger';
+
 // Bootstrap System - One-line service setup
 export { bootstrap, bootstrapGodsEyeApp, BootstrapConfig } from './setup/app.bootstrap';
 

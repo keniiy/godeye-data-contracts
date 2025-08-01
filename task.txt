@@ -1,0 +1,43 @@
+Issues to Address in @kenniy/godeye-data-contracts:
+
+  1. Swagger UI Configuration:
+    - Increase response size limits in Swagger UI
+  settings
+    - Configure maxDisplayRequestSize and
+  maxDisplayResponseSize
+    - Enable proper JSON schema rendering
+  2. OpenAPI Spec Optimization:
+    - Add truncation handling for large descriptions
+    - Implement description length limits (max 500
+  characters)
+    - Move verbose docs to externalDocs field
+  3. Bootstrap Function Updates:
+  // In bootstrap function, add:
+  const swaggerOptions = {
+    swaggerOptions: {
+      maxDisplayRequestSize: 10000,
+      maxDisplayResponseSize: 10000,
+      docExpansion: 'list',     // Show endpoints
+  collapsed
+      filter: true,             // Enable search
+      showRequestHeaders: true
+    }
+  };
+  4. Custom @Api Decorator:
+    - Limit description to 2-3 sentences
+    - Move detailed docs to separate field
+    - Ensure proper DTO schema generation
+
+  Quick Fix:
+
+  Update your package to version that handles large specs
+   better or patch the bootstrap function to include
+  proper Swagger UI configuration options.
+
+  and add doc url also
+
+  and support deeply populated responses thanks
+  
+
+  Would you like me to help you identify the specific
+  changes needed in the bootstrap package code?

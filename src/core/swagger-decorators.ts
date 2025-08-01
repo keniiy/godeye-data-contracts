@@ -15,6 +15,7 @@ import {
   ApiCreatedResponse,
   getSchemaPath
 } from '@nestjs/swagger';
+import { optimizeDescription, DescriptionConfig } from './swagger';
 
 // Interface for decorator options
 interface ApiOptions {
@@ -24,6 +25,9 @@ interface ApiOptions {
   excludeCommonErrors?: boolean;
   description?: string;
   paginated?: boolean; // Force pagination detection
+  externalDocUrl?: string;
+  descriptionConfig?: DescriptionConfig;
+  optimizeDescription?: boolean; // Enable/disable description optimization
 }
 
 /**
@@ -49,10 +53,17 @@ export function Api<T>(
     const defaultMessage = generateDefaultMessage(httpMethod, responseDto.name, isPaginated);
     const message = options.message || defaultMessage;
     
+    // Optimize description if enabled
+    let finalDescription = options.description;
+    if (options.optimizeDescription !== false && options.description) {
+      const optimized = optimizeDescription(options.description, options.descriptionConfig);
+      finalDescription = optimized.description;
+    }
+
     // Build decorators array
     const decorators = [
       // Success response
-      buildSuccessResponse(responseDto, message, status, isPaginated, options.description),
+      buildSuccessResponse(responseDto, message, status, isPaginated, finalDescription),
       
       // Common errors (unless excluded)
       ...(options.excludeCommonErrors ? [] : [buildCommonErrors()]),

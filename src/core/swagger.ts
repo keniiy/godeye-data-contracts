@@ -7,6 +7,96 @@ import { applyDecorators, Type, HttpStatus } from '@nestjs/common';
 import { ApiResponse as NestApiResponse, getSchemaPath, ApiExtraModels } from '@nestjs/swagger';
 
 /**
+ * Configuration for description handling
+ */
+export interface DescriptionConfig {
+  maxLength?: number;
+  truncateAt?: number;
+  addEllipsis?: boolean;
+  preserveFormatting?: boolean;
+}
+
+/**
+ * Default description configuration
+ */
+const DEFAULT_DESCRIPTION_CONFIG: Required<DescriptionConfig> = {
+  maxLength: 500,
+  truncateAt: 450,
+  addEllipsis: true,
+  preserveFormatting: false
+};
+
+/**
+ * Truncate and optimize description text for Swagger UI
+ * Handles large descriptions by truncating them and preserving important information
+ */
+export function optimizeDescription(
+  description: string, 
+  config: DescriptionConfig = {}
+): { description: string; isTruncated: boolean; originalLength: number } {
+  const finalConfig = { ...DEFAULT_DESCRIPTION_CONFIG, ...config };
+  const originalLength = description.length;
+  
+  if (originalLength <= finalConfig.maxLength) {
+    return { 
+      description, 
+      isTruncated: false, 
+      originalLength 
+    };
+  }
+
+  // Find a good truncation point (prefer end of sentence)
+  let truncateAt = finalConfig.truncateAt;
+  const truncationZone = description.substring(truncateAt - 50, truncateAt + 50);
+  const sentenceEnd = truncationZone.match(/[.!?]\s/);
+  
+  if (sentenceEnd) {
+    const sentenceEndIndex = truncationZone.indexOf(sentenceEnd[0]) + (truncateAt - 50);
+    if (sentenceEndIndex > 0 && sentenceEndIndex < finalConfig.maxLength) {
+      truncateAt = sentenceEndIndex + 1;
+    }
+  }
+
+  let truncatedDescription = description.substring(0, truncateAt).trim();
+  
+  if (finalConfig.addEllipsis) {
+    truncatedDescription += '...';
+  }
+
+  // Add truncation notice
+  const remainingChars = originalLength - truncateAt;
+  truncatedDescription += `\n\n*[Truncated: ${remainingChars} more characters. See external documentation for full details.]*`;
+
+  return { 
+    description: truncatedDescription, 
+    isTruncated: true, 
+    originalLength 
+  };
+}
+
+/**
+ * Enhanced API decorator with description optimization
+ */
+export function ApiResponseWithOptimizedDescription<T>(
+  dataType: Type<T>,
+  options: {
+    description: string;
+    paginated?: boolean;
+    status_code?: number;
+    errors?: Array<'BadRequest' | 'Unauthorized' | 'Forbidden' | 'NotFound' | 'Conflict' | 'UnprocessableEntity' | 'TooManyRequests' | 'InternalServerError'>;
+    externalDocUrl?: string;
+    descriptionConfig?: DescriptionConfig;
+  }
+): MethodDecorator {
+  const optimizedDesc = optimizeDescription(options.description, options.descriptionConfig);
+  
+  return ApiResponse(dataType, {
+    ...options,
+    description: optimizedDesc.description
+  });
+}
+
+/**
  * Unified API Response Decorator
  * Replaces @ApiSuccessResponse, @ApiPaginatedResponse, @CommonApiErrorResponses
  */
@@ -48,7 +138,7 @@ export function ApiResponse<T>(
 }
 
 /**
- * Create success response schema
+ * Create success response schema with enhanced support for deeply populated responses
  */
 function createSuccessResponseSchema<T>(dataType: Type<T>, description: string) {
   return {
@@ -66,8 +156,15 @@ function createSuccessResponseSchema<T>(dataType: Type<T>, description: string) 
         description: 'Human-readable message describing the result',
       },
       data: {
-        $ref: getSchemaPath(dataType),
-        description: 'Response data payload',
+        oneOf: [
+          { $ref: getSchemaPath(dataType) },
+          { 
+            type: 'object',
+            description: 'Deeply populated response with nested relations',
+            additionalProperties: true
+          }
+        ],
+        description: 'Response data payload with optional deep population of nested relations',
       },
       status_code: {
         type: 'number',
@@ -94,11 +191,18 @@ function createSuccessResponseSchema<T>(dataType: Type<T>, description: string) 
         description: 'Performance and context metadata',
         nullable: true,
         properties: {
-          ms_speed: { type: 'number', example: 45 },
-          cpu_usage_percent: { type: 'number', example: 23.5 },
-          memory_used_mb: { type: 'number', example: 128.4 },
-          heap_used_mb: { type: 'number', example: 64.2 },
-          cache_hit: { type: 'boolean', example: true },
+          ms_speed: { type: 'number', example: 45, description: 'Processing speed in milliseconds' },
+          cpu_usage_percent: { type: 'number', example: 23.5, description: 'CPU usage percentage' },
+          memory_used_mb: { type: 'number', example: 128.4, description: 'Memory usage in MB' },
+          heap_used_mb: { type: 'number', example: 64.2, description: 'Heap memory usage in MB' },
+          cache_hit: { type: 'boolean', example: true, description: 'Whether cache was hit' },
+          query_depth: { type: 'number', example: 3, description: 'Depth of nested queries/populations' },
+          relations_populated: { 
+            type: 'array', 
+            items: { type: 'string' }, 
+            example: ['user', 'user.profile', 'comments.author'],
+            description: 'List of populated relations in deeply nested responses'
+          },
         },
       },
     },
@@ -125,8 +229,17 @@ function createPaginatedResponseSchema<T>(dataType: Type<T>, description: string
       },
       data: {
         type: 'array',
-        items: { $ref: getSchemaPath(dataType) },
-        description: 'Array of data items',
+        items: {
+          oneOf: [
+            { $ref: getSchemaPath(dataType) },
+            { 
+              type: 'object',
+              description: 'Deeply populated item with nested relations',
+              additionalProperties: true
+            }
+          ]
+        },
+        description: 'Array of data items with optional deep population of nested relations',
       },
       status_code: {
         type: 'number',
@@ -188,6 +301,21 @@ function createPaginatedResponseSchema<T>(dataType: Type<T>, description: string
         type: 'object',
         description: 'Performance and context metadata',
         nullable: true,
+        properties: {
+          ms_speed: { type: 'number', example: 85, description: 'Processing speed in milliseconds' },
+          cpu_usage_percent: { type: 'number', example: 34.2, description: 'CPU usage percentage' },
+          memory_used_mb: { type: 'number', example: 156.7, description: 'Memory usage in MB' },
+          heap_used_mb: { type: 'number', example: 78.3, description: 'Heap memory usage in MB' },
+          cache_hit: { type: 'boolean', example: false, description: 'Whether cache was hit' },
+          query_depth: { type: 'number', example: 2, description: 'Depth of nested queries/populations' },
+          relations_populated: {
+            type: 'array',
+            items: { type: 'string' },
+            example: ['category', 'author.profile'],
+            description: 'List of populated relations in deeply nested responses'
+          },
+          total_queries: { type: 'number', example: 3, description: 'Total number of database queries executed' },
+        },
       },
     },
   };

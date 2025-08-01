@@ -5,6 +5,50 @@ All notable changes to `@kenniy/godeye-data-contracts` will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2025-08-01
+
+### 🚀 Swagger UI Enhancements & OpenAPI Optimization
+
+#### Enhanced Swagger UI Configuration
+- **Increased Response Limits**: Set `maxDisplayRequestSize: 10000` and `maxDisplayResponseSize: 10000`
+- **Better UX**: Added filter, deep linking, request duration display, and enhanced navigation
+- **Custom CSS**: Improved UI with better overflow handling and responsive design
+- **Custom Site Title**: Dynamic titles based on service name
+
+#### Description Optimization System
+- **Smart Truncation**: Implemented intelligent description truncation (max 500 chars)
+- **Sentence-Aware**: Truncation respects sentence boundaries for better readability
+- **Truncation Notices**: Clear indicators when content is truncated with external doc references
+- **Configurable Limits**: Customizable `DescriptionConfig` for different truncation strategies
+
+#### External Documentation Support
+- **External Doc URLs**: Bootstrap config now supports `docUrl` for external documentation
+- **Auto-Integration**: External docs automatically linked in Swagger UI
+- **Verbose Doc Handling**: Long descriptions moved to external docs to keep Swagger clean
+
+#### Deep Population Response Support
+- **Enhanced Schemas**: Updated response schemas to handle deeply populated nested objects
+- **Flexible Data Types**: `oneOf` schemas support both basic DTOs and complex populated responses
+- **Rich Metadata**: Added `query_depth`, `relations_populated`, and `total_queries` tracking
+- **Performance Monitoring**: Enhanced metadata for deeply nested query performance analysis
+
+#### New Utilities & Decorators
+- **`optimizeDescription()`**: Utility function for smart description truncation
+- **`ApiResponseWithOptimizedDescription`**: Enhanced decorator with built-in optimization
+- **`DescriptionConfig`**: Configuration interface for customizing truncation behavior
+- **Enhanced `@Api` decorator**: Now supports description optimization and external docs
+
+### 🔧 Configuration Enhancements
+- Updated `BootstrapConfig` interface with new Swagger options
+- Added support for custom display sizes and external documentation URLs
+- Backward compatible - all existing configurations continue to work
+
+### 📚 Developer Experience
+- Better Swagger UI performance with large API specifications
+- Cleaner documentation with smart truncation
+- External documentation integration for comprehensive API docs
+- Enhanced support for complex, deeply nested API responses
+
 ## [1.1.0] - 2025-07-30
 
 ### 🚀 Major Features Added

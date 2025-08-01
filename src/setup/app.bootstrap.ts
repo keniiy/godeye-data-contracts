@@ -24,6 +24,9 @@ export interface BootstrapConfig {
     version?: string;
     path?: string;
     customOptions?: any;
+    docUrl?: string;
+    maxDisplayRequestSize?: number;
+    maxDisplayResponseSize?: number;
   };
   cors?: {
     enabled?: boolean;
@@ -80,21 +83,70 @@ export async function bootstrap(
     // Configure Swagger documentation
     const swaggerEnabled = config.enableSwagger ?? config.swagger?.enabled ?? true;
     if (swaggerEnabled) {
-      const swaggerConfig = new DocumentBuilder()
+      let swaggerConfigBuilder = new DocumentBuilder()
         .setTitle(config.swagger?.title || `${config.serviceName} API`)
         .setDescription(
           config.swagger?.description || 
           `${config.serviceName} microservice built with GOD-EYE Data Contracts`
         )
         .setVersion(config.swagger?.version || '1.0.0')
-        .addBearerAuth()
-        .build();
+        .addBearerAuth();
+
+      // Add external documentation URL if provided
+      if (config.swagger?.docUrl) {
+        swaggerConfigBuilder = swaggerConfigBuilder.setExternalDoc('External Documentation', config.swagger.docUrl);
+      }
+
+      const swaggerConfig = swaggerConfigBuilder.build();
       
       const document = SwaggerModule.createDocument(app, swaggerConfig);
       const swaggerPath = config.swagger?.path || 'docs';
-      SwaggerModule.setup(swaggerPath, app, document, config.swagger?.customOptions);
+      
+      // Enhanced Swagger UI options with increased limits and better UX
+      const swaggerOptions = {
+        swaggerOptions: {
+          maxDisplayRequestSize: config.swagger?.maxDisplayRequestSize || 10000,
+          maxDisplayResponseSize: config.swagger?.maxDisplayResponseSize || 10000,
+          docExpansion: 'list',     // Show endpoints collapsed
+          filter: true,             // Enable search
+          showRequestHeaders: true, // Show request headers
+          deepLinking: true,        // Enable deep linking
+          displayRequestDuration: true, // Show request duration
+          tryItOutEnabled: true,    // Enable try it out by default
+          supportedSubmitMethods: ['get', 'post', 'put', 'delete', 'patch'], // Enable all methods
+          requestInterceptor: undefined, // Allow request interception
+          responseInterceptor: undefined, // Allow response interception
+        },
+        customCss: `
+          .swagger-ui .topbar { display: none; }
+          .swagger-ui .info { margin: 20px 0; }
+          .swagger-ui .scheme-container { margin: 20px 0; }
+          .swagger-ui .opblock .opblock-summary { cursor: pointer; }
+          .swagger-ui .parameters-col_description p,
+          .swagger-ui .parameters-col_description div { 
+            max-height: 200px; 
+            overflow-y: auto; 
+            word-break: break-word;
+          }
+          .swagger-ui .response-col_description { 
+            max-height: 300px; 
+            overflow-y: auto; 
+          }
+          .swagger-ui .model-box { 
+            max-height: 400px; 
+            overflow-y: auto; 
+          }
+        `,
+        customSiteTitle: `${config.serviceName} API Documentation`,
+        ...config.swagger?.customOptions
+      };
+      
+      SwaggerModule.setup(swaggerPath, app, document, swaggerOptions);
       
       logger.log(`📚 Swagger documentation available at: http://localhost:${config.port || 3000}/${swaggerPath}`);
+      if (config.swagger?.docUrl) {
+        logger.log(`📖 External documentation: ${config.swagger.docUrl}`);
+      }
     }
     
     // Execute custom beforeStart hook
