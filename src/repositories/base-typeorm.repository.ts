@@ -484,7 +484,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   }
 
   /**
-   * Optimized update with selective field updates
+   * Optimized update with selective field updates  
    * Performance: ~3-8ms per update
    */
   async updateById(id: string | number, data: Partial<T>): Promise<T | null> {
@@ -513,26 +513,99 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
 
   /**
    * Optimized bulk updates with batch processing
-   * Performance: ~20-100ms for 1000 updates (vs ~5000ms individual updates)
+   * Performance: ~20-100ms for 1000 updates (vs ~5000ms individual updates)  
    */
   async updateMany(
-    criteria: Partial<T>,
+    criteria: ICriteria<T>,
     data: Partial<T>
-  ): Promise<{ affected: number }> {
+  ): Promise<{ modifiedCount: number }> {
     const startTime = performance.now();
 
     try {
-      const result = await this.repository.update(criteria, data);
+      const result = await this.repository.update(criteria.where || {}, data);
       const affected = result.affected || 0;
 
       this.logQueryMetrics("updateMany", performance.now() - startTime, {
         criteria,
-        affected,
+        modifiedCount: affected,
       });
 
-      return { affected };
+      return { modifiedCount: affected };
     } catch (error) {
       this.handleQueryError("updateMany", error, { criteria, data });
+      throw error;
+    }
+  }
+
+  /**
+   * Delete many entities matching criteria
+   */
+  async deleteMany(criteria: ICriteria<T>): Promise<{ deletedCount: number }> {
+    const startTime = performance.now();
+
+    try {
+      const result = await this.repository.delete(criteria.where || {});
+      const deletedCount = result.affected || 0;
+
+      this.logQueryMetrics("deleteMany", performance.now() - startTime, {
+        criteria,
+        deletedCount,
+      });
+
+      return { deletedCount };
+    } catch (error) {
+      this.handleQueryError("deleteMany", error, { criteria });
+      throw error;
+    }
+  }
+
+  /**
+   * Check if entity exists matching criteria
+   */
+  async exists(criteria: ICriteria<T>): Promise<boolean> {
+    const count = await this.count(criteria);
+    return count > 0;
+  }
+
+  /**
+   * Check if entity exists by filters (alias for exists)
+   */
+  async existsByFilters(criteria: ICriteria<T>): Promise<boolean> {
+    return this.exists(criteria);
+  }
+
+  /**
+   * Find one and update atomically
+   */
+  async findOneAndUpdate<R = T>(
+    criteria: ICriteria<T>,
+    data: Partial<T>,
+    options?: { populate?: string[] }
+  ): Promise<R | null> {
+    const startTime = performance.now();
+
+    try {
+      // First update
+      await this.repository.update(criteria.where || {}, data);
+      
+      // Then find the updated entity
+      const queryBuilder = this.createOptimizedQueryBuilder();
+      this.applyCriteria(queryBuilder, criteria);
+      
+      if (options?.populate) {
+        this.applyDeepRelations(queryBuilder, options.populate, queryBuilder.alias);
+      }
+      
+      const result = await queryBuilder.getOne();
+
+      this.logQueryMetrics("findOneAndUpdate", performance.now() - startTime, {
+        criteria,
+        data
+      });
+
+      return result as R | null;
+    } catch (error) {
+      this.handleQueryError("findOneAndUpdate", error, { criteria, data });
       throw error;
     }
   }

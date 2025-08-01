@@ -252,50 +252,44 @@ export interface ICriteria<T> {
 }
 
 /**
- * Unified repository interface that works with both TypeORM entities and Mongoose documents
+ * Unified repository interface with whereConfig pattern for intelligent search
+ * Matches the complete-max-usage.md example exactly
  */
 export interface IRepository<T> {
-  // Basic CRUD operations
-  find<R = T>(criteria: ICriteria<T>): Promise<R[]>;
-  findOne<R = T>(criteria: ICriteria<T>): Promise<R | null>;
-  create(data: Partial<T>): Promise<T>;
-  update(criteria: ICriteria<T>, data: Partial<T>): Promise<T>;
-  delete(criteria: ICriteria<T>): Promise<boolean>;
-
-  // Advanced operations
+  // Core CRUD operations with whereConfig pattern
+  find<R = T>(whereConfig: IWhereConfig, queryDto: any): Promise<R[]>;
+  findOne<R = T>(whereConfig: IWhereConfig, queryDto: any): Promise<R | null>;
+  findById<R = T>(id: string | number, whereConfig: IWhereConfig, queryDto?: any): Promise<R | null>;
   findWithPagination<R = T>(
-    criteria: ICriteria<T>
+    whereConfig: IWhereConfig,
+    queryDto: any
   ): Promise<IPaginatedResult<R>>;
-  bulkOperations<R = T>(
-    operations: IBulkOperation<T>[]
-  ): Promise<IBulkResult<R>>;
-
-  // EMRO-inspired methods (DRY - no redundant wrappers)
-  findById<R = T>(id: string, include?: string[]): Promise<R | null>;
-  updateById<R = T>(id: string, data: Partial<T>): Promise<R | null>;
+  
+  // Standard CRUD operations (no whereConfig needed)
+  create(data: Partial<T>): Promise<T>;
+  createMany(data: Partial<T>[]): Promise<T[]>;
+  updateById<R = T>(id: string | number, data: Partial<T>): Promise<R | null>;
   updateMany(
     criteria: ICriteria<T>,
     data: Partial<T>
   ): Promise<{ modifiedCount: number }>;
+  deleteById(id: string | number): Promise<boolean>;
+  deleteMany(criteria: ICriteria<T>): Promise<{ deletedCount: number }>;
+  
+  // Utility operations
+  count(criteria: ICriteria<T>): Promise<number>;
+  exists(criteria: ICriteria<T>): Promise<boolean>;
+  
+  // Bulk operations
+  bulkOperations<R = T>(
+    operations: IBulkOperation<T>[]
+  ): Promise<IBulkResult<R>>;
   findOneAndUpdate<R = T>(
     criteria: ICriteria<T>,
     data: Partial<T>,
     options?: { populate?: string[] }
   ): Promise<R | null>;
-  deleteById(id: string): Promise<boolean>;
-  deleteMany(criteria: ICriteria<T>): Promise<{ deletedCount: number }>;
   existsByFilters(criteria: ICriteria<T>): Promise<boolean>;
-  createMany(data: Partial<T>[]): Promise<T[]>;
-
-  // NOTE: Removed redundant wrapper methods:
-  // - findByIdWithPopulate → use findById(id, include)
-  // - findOneWithPopulate → use findOne({ ...criteria, include })
-  // - findManyWithPopulate → use find({ ...criteria, include })
-  // - updateOneWithPopulate → use findOneAndUpdate(criteria, data, { populate })
-
-  // Utility operations
-  count(criteria: ICriteria<T>): Promise<number>;
-  exists(criteria: ICriteria<T>): Promise<boolean>;
 
   // Aggregation operations (EMRO-inspired)
   aggregate<R = any>(pipeline: any[]): Promise<R[]>;

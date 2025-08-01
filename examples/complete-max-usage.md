@@ -4,7 +4,7 @@
 
 This example shows the complete flow with:
 - Frontend simple DTO
-- Backend whereConfig with search algorithms  
+- Backend whereConfig with search algorithms
 - Repository intelligent processing
 - ResponseFactory auto-detection
 
@@ -95,12 +95,12 @@ export class UserRepository extends BaseTypeORMRepository<User> {
 ```typescript
 import { Controller, Get, Query, Param } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
-import { 
-  FindManyDto, 
-  FindOneDto, 
+import {
+  FindManyDto,
+  FindOneDto,
   IWhereConfig,
   SearchStrategy,
-  ResponseFactory 
+  ResponseFactory
 } from '@kenniy/godeye-data-contracts';
 
 @Controller('users')
@@ -118,7 +118,7 @@ export class UsersController {
         isDeleted: false,
         isVerified: true
       },
-      
+
       // Backend-defined search algorithms
       searchConfig: [
         {
@@ -147,23 +147,23 @@ export class UsersController {
           weight: 0.7
         }
       ],
-      
+
       // Dynamic conditions based on context
       dynamicConditions: (criteria) => {
         const dynamic: any = {};
-        
+
         // If searching, only show complete profiles
         if (criteria.search?.term) {
           dynamic.profileComplete = true;
         }
-        
+
         return dynamic;
       }
     };
-    
+
     // Execute with clean separation: whereConfig + queryDto
     const result = await this.userRepository.findWithPagination(whereConfig, queryDto);
-    
+
     // ResponseFactory auto-detects pagination and formats response
     return ResponseFactory.success(result);
   }
@@ -173,9 +173,9 @@ export class UsersController {
     const whereConfig: IWhereConfig = {
       conditions: { status: 'active', isDeleted: false }
     };
-    
+
     const result = await this.userRepository.findById(id, whereConfig, queryDto);
-    
+
     // ResponseFactory auto-detects single entity format
     return ResponseFactory.success(result);
   }
@@ -200,7 +200,7 @@ const queryDto = {
 ### What Happens Behind the Scenes
 
 1. **Frontend**: Sends simple request
-2. **DTO**: Converts to `ICriteria` format  
+2. **DTO**: Converts to `ICriteria` format
 3. **Repository**: Applies whereConfig + intelligent search
 4. **Database**: Executes optimized query with fuzzy matching
 5. **ResponseFactory**: Auto-detects format and returns structured response
@@ -263,19 +263,19 @@ const queryDto = {
 
 ## 6. Key Benefits
 
-✅ **Frontend Simplicity**: Just search + what data they want  
-✅ **Backend Control**: Full control over algorithms and conditions  
-✅ **Clean Separation**: whereConfig vs queryDto  
-✅ **Auto Response Format**: ResponseFactory detects and formats appropriately  
-✅ **Graceful Error Handling**: Relations fail silently with metadata  
-✅ **Performance Monitoring**: Query times and metrics included  
-✅ **Intelligent Search**: Multi-algorithm, multi-field with relevance  
-✅ **Deep Relations**: Supports nested population (`business.owner`)  
-✅ **TypeScript Safety**: Full type checking throughout  
-✅ **Consistent Responses**: Same format across all endpoints  
-✅ **Dual ORM Support**: Same interface for TypeORM and Mongoose  
-✅ **Database Agnostic**: Switch between PostgreSQL and MongoDB seamlessly  
-✅ **Enhanced Repositories**: Advanced whereConfig with backward compatibility  
+✅ **Frontend Simplicity**: Just search + what data they want
+✅ **Backend Control**: Full control over algorithms and conditions
+✅ **Clean Separation**: whereConfig vs queryDto
+✅ **Auto Response Format**: ResponseFactory detects and formats appropriately
+✅ **Graceful Error Handling**: Relations fail silently with metadata
+✅ **Performance Monitoring**: Query times and metrics included
+✅ **Intelligent Search**: Multi-algorithm, multi-field with relevance
+✅ **Deep Relations**: Supports nested population (`business.owner`)
+✅ **TypeScript Safety**: Full type checking throughout
+✅ **Consistent Responses**: Same format across all endpoints
+✅ **Dual ORM Support**: Same interface for TypeORM and Mongoose
+✅ **Database Agnostic**: Switch between PostgreSQL and MongoDB seamlessly
+✅ **Enhanced Repositories**: Advanced whereConfig with backward compatibility
 
 ## 7. Search Algorithm Options
 
@@ -293,14 +293,14 @@ const queryDto = {
 {
   // Single field
   field: "firstName",
-  
+
   // Multiple fields (same weight)
   fields: ["firstName", "lastName"],
-  
+
   // Array field in database
   field: "skills",
   isArray: true,
-  
+
   // Search configuration
   defaultStrategy: SearchStrategy.FUZZY,
   priority: 10,

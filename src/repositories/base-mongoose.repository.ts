@@ -125,13 +125,16 @@ export abstract class BaseMongooseRepository<T extends Document> {
   }
 
   /**
-   * Convenience methods for common patterns
+   * Find entity by ID with whereConfig pattern
    */
-  async findById(id: string, relations?: string[]): Promise<T | null> {
-    return this.findOne({
-      where: { _id: id } as any,
-      relations,
-    });
+  async findById(
+    id: string,
+    whereConfig: any,
+    queryDto?: any
+  ): Promise<T | null> {
+    const criteria = queryDto ? queryDto.toICriteria() : {};
+    criteria.where = { ...criteria.where, _id: id };
+    return this.executeIntelligentSearch(whereConfig, criteria, { single: true });
   }
 
   async count(criteria: ICriteria<T> = {}): Promise<number> {
@@ -149,11 +152,31 @@ export abstract class BaseMongooseRepository<T extends Document> {
 
   /**
    * Find single document with MongoDB index optimization
+   * Overloaded to support both old and new signatures for backward compatibility
    * Performance: ~2-4ms for indexed queries, ~10-50ms for full collection scans
    *
    * Enterprise optimization: Uses MongoDB's native query planner
    */
-  async findOne(criteria: ICriteria<T>): Promise<T | null> {
+  async findOne(
+    whereConfigOrCriteria: any,
+    queryDto?: any
+  ): Promise<T | null> {
+    // Check if this is the new whereConfig pattern
+    if (queryDto && typeof queryDto.toICriteria === 'function') {
+      // New pattern: findOne(whereConfig, queryDto)
+      const criteria = queryDto.toICriteria();
+      return this.executeIntelligentSearch(whereConfigOrCriteria, criteria, { single: true });
+    } else {
+      // Backward compatibility: findOne(criteria)
+      const criteria = whereConfigOrCriteria as ICriteria<T>;
+      return this.findOneLegacy(criteria);
+    }
+  }
+
+  /**
+   * Legacy findOne implementation for backward compatibility
+   */
+  private async findOneLegacy(criteria: ICriteria<T>): Promise<T | null> {
     const startTime = performance.now();
 
     try {
@@ -376,11 +399,88 @@ export abstract class BaseMongooseRepository<T extends Document> {
 
       const modified = result.modifiedCount || 0;
 
-      this.logQueryMetrics('updateMany', performance.now() - startTime, { criteria, modified });
+      this.logQueryMetrics('updateMany', performance.now() - startTime, { criteria, modifiedCount });
 
-      return { modified };
+      return { modifiedCount };
     } catch (error) {
       this.handleQueryError('updateMany', error, { criteria, data });
+      throw error;
+    }
+  }
+
+  /**
+   * Delete many documents matching criteria
+   */
+  async deleteMany(criteria: ICriteria<T>): Promise<{ deletedCount: number }> {
+    const startTime = performance.now();
+
+    try {
+      const result = await this.model.deleteMany(criteria.where || {}).exec();
+      const deletedCount = result.deletedCount || 0;
+
+      this.logQueryMetrics('deleteMany', performance.now() - startTime, {
+        criteria,
+        deletedCount,
+      });
+
+      return { deletedCount };
+    } catch (error) {
+      this.handleQueryError('deleteMany', error, { criteria });
+      throw error;
+    }
+  }
+
+  /**
+   * Check if document exists matching criteria
+   */
+  async exists(criteria: ICriteria<T>): Promise<boolean> {
+    const count = await this.count(criteria);
+    return count > 0;
+  }
+
+  /**
+   * Check if document exists by filters (alias for exists)
+   */
+  async existsByFilters(criteria: ICriteria<T>): Promise<boolean> {
+    return this.exists(criteria);
+  }
+
+  /**
+   * Find one and update atomically with MongoDB's findOneAndUpdate
+   */
+  async findOneAndUpdate<R = T>(
+    criteria: ICriteria<T>,
+    data: UpdateQuery<T>,
+    options?: { populate?: string[] }
+  ): Promise<R | null> {
+    const startTime = performance.now();
+
+    try {
+      let query = this.model.findOneAndUpdate(
+        criteria.where || {},
+        data,
+        {
+          new: true,
+          runValidators: true,
+          lean: false
+        }
+      );
+
+      if (options?.populate) {
+        const populateOptions = this.buildDeepPopulateOptions(options.populate);
+        query = query.populate(populateOptions);
+      }
+
+      const result = await query.exec();
+
+      this.logQueryMetrics('findOneAndUpdate', performance.now() - startTime, {
+        criteria,
+        data
+      });
+
+      return result as R | null;
+    } catch (error) {
+      this.handleQueryError('findOneAndUpdate', error, { criteria, data });
       throw error;
     }
   }
@@ -785,5 +885,210 @@ export abstract class BaseMongooseRepository<T extends Document> {
       console.error(`Failed to explain query for ${this.collectionName}:`, error);
       return null;
     }
+  }
+
+  // ============================================================================
+  // INTELLIGENT SEARCH ENGINE (whereConfig PATTERN)
+  // ============================================================================
+
+  /**
+   * Execute intelligent search with whereConfig and criteria  
+   * Similar to TypeORM implementation but adapted for Mongoose
+   */
+  async executeIntelligentSearch(
+    whereConfig: any,
+    criteria: ICriteria<T>,
+    options: { single?: boolean; array?: boolean } = {}
+  ): Promise<any> {
+    const startTime = performance.now();
+
+    try {
+      let matchConditions: any = {};
+
+      // 1. Apply backend WHERE conditions
+      if (whereConfig.conditions) {
+        matchConditions = { ...matchConditions, ...whereConfig.conditions };
+      }
+
+      // 2. Apply dynamic conditions if provided
+      if (whereConfig.dynamicConditions) {
+        const dynamicWhere = whereConfig.dynamicConditions(criteria);
+        matchConditions = { ...matchConditions, ...dynamicWhere };
+      }
+
+      // 3. Apply frontend WHERE conditions (from DTO)
+      if (criteria.where) {
+        matchConditions = { ...matchConditions, ...criteria.where };
+      }
+
+      // 4. Apply intelligent search with backend config
+      if (criteria.search?.term && whereConfig.searchConfig) {
+        const searchConditions = this.buildConfiguredSearch(criteria.search.term, whereConfig.searchConfig);
+        if (searchConditions.length > 0) {
+          matchConditions.$or = searchConditions;
+        }
+      }
+
+      let query = this.model.find(matchConditions);
+
+      // 5. Apply relations with graceful error handling
+      const { validRelations, failedRelations } = this.applyRelationsWithErrorHandling(
+        query,
+        criteria.relations || []
+      );
+
+      // 6. Apply sorting
+      if (criteria.sort) {
+        const mongoSort: any = {};
+        Object.entries(criteria.sort).forEach(([key, value]) => {
+          mongoSort[key] = value === 'ASC' ? 1 : value === 'DESC' ? -1 : value;
+        });
+        query = query.sort(mongoSort);
+      } else {
+        query = query.sort({ _id: -1 });
+      }
+
+      // 7. Execute based on options
+      let result: any;
+      if (options.single) {
+        const data = await query.findOne().exec();
+        result = {
+          data,
+          metadata: this.buildMetadata(startTime, whereConfig, validRelations, failedRelations)
+        };
+      } else if (options.array) {
+        const items = await query.exec();
+        result = {
+          items,
+          metadata: this.buildMetadata(startTime, whereConfig, validRelations, failedRelations)
+        };
+      } else {
+        // Pagination  
+        const { page = 1, limit = 20 } = criteria;
+        const skip = (page - 1) * limit;
+        
+        const [items, total] = await Promise.all([
+          query.skip(skip).limit(limit).exec(),
+          this.model.countDocuments(matchConditions).exec()
+        ]);
+
+        result = {
+          items,
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit), 
+          hasNext: page * limit < total,
+          hasPrev: page > 1,
+          metadata: this.buildMetadata(startTime, whereConfig, validRelations, failedRelations, { total, returned: items.length })
+        };
+      }
+
+      return result;
+    } catch (error) {
+      this.handleQueryError("intelligentSearch", error, { whereConfig, criteria });
+      throw error;
+    }
+  }
+
+  /**
+   * Build configured search conditions for MongoDB
+   */
+  protected buildConfiguredSearch(searchTerm: string, searchConfig: any[]): any[] {
+    const searchConditions: any[] = [];
+
+    searchConfig.forEach((config) => {
+      const fields = config.fields || [config.field!];
+
+      fields.forEach((field: string) => {
+        switch (config.defaultStrategy) {
+          case 'exact':
+            searchConditions.push({ [field]: searchTerm });
+            break;
+          case 'contains':
+            if (config.isArray) {
+              searchConditions.push({ [field]: { $in: [searchTerm] } });
+            } else {
+              searchConditions.push({ [field]: { $regex: searchTerm, $options: 'i' } });
+            }
+            break;
+          case 'startsWith':
+            searchConditions.push({ [field]: { $regex: `^${searchTerm}`, $options: 'i' } });
+            break;
+          case 'endsWith':
+            searchConditions.push({ [field]: { $regex: `${searchTerm}$`, $options: 'i' } });
+            break;
+          case 'fuzzy':
+            // For fuzzy, use regex with some tolerance (simplified)
+            searchConditions.push({ [field]: { $regex: searchTerm, $options: 'i' } });
+            break;
+        }
+      });
+    });
+
+    return searchConditions;
+  }
+
+  /**
+   * Apply relations with graceful error handling for Mongoose
+   */
+  protected applyRelationsWithErrorHandling(
+    query: any,
+    relations: string[]
+  ): { validRelations: string[]; failedRelations: Array<{ relation: string; error: string; severity: string }> } {
+    const validRelations: string[] = [];
+    const failedRelations: Array<{ relation: string; error: string; severity: string }> = [];
+
+    relations.forEach((relation) => {
+      try {
+        if (this.isValidRelationPath(relation)) {
+          const populateOptions = this.buildDeepPopulateOptions([relation]);
+          query = query.populate(populateOptions);
+          validRelations.push(relation);
+        } else {
+          failedRelations.push({
+            relation,
+            error: "Relation not found in schema metadata",
+            severity: "warning"
+          });
+        }
+      } catch (error: any) {
+        failedRelations.push({
+          relation,
+          error: error.message || "Failed to populate relation",
+          severity: "warning"
+        });
+      }
+    });
+
+    return { validRelations, failedRelations };
+  }
+
+  /**
+   * Build metadata for response
+   */
+  protected buildMetadata(
+    startTime: number,
+    whereConfig: any,
+    validRelations: string[],
+    failedRelations: Array<{ relation: string; error: string; severity: string }>,
+    additionalData?: any
+  ): any {
+    return {
+      queryTime: `${Math.round((performance.now() - startTime) * 100) / 100}ms`,
+      searchAlgorithms: this.extractAlgorithms(whereConfig.searchConfig),
+      backendConditions: Object.keys(whereConfig.conditions || {}),
+      relationsLoaded: validRelations,
+      relationErrors: failedRelations,
+      ...additionalData
+    };
+  }
+
+  /**
+   * Extract algorithms from search config
+   */
+  protected extractAlgorithms(searchConfig?: any[]): string[] {
+    if (!searchConfig) return [];
+    return [...new Set(searchConfig.map(config => config.defaultStrategy))];
   }
 }
