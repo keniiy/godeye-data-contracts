@@ -410,9 +410,9 @@ describe('Aggregate Repository Integration Tests', () => {
       ];
 
       invalidConfigs.forEach(config => {
-        const hasRequiredFields = config.hasOwnProperty('collection') || config.hasOwnProperty('table');
-        const hasLocalField = config.hasOwnProperty('localField');
-        const hasForeignField = config.hasOwnProperty('foreignField');
+        const hasRequiredFields = Object.prototype.hasOwnProperty.call(config, 'collection') || Object.prototype.hasOwnProperty.call(config, 'table');
+        const hasLocalField = Object.prototype.hasOwnProperty.call(config, 'localField');
+        const hasForeignField = Object.prototype.hasOwnProperty.call(config, 'foreignField');
         
         // At least one should be missing for these invalid configs
         expect(hasRequiredFields && hasLocalField && hasForeignField).toBe(false);
@@ -439,9 +439,9 @@ describe('Aggregate Repository Integration Tests', () => {
       ];
 
       invalidAggregations.forEach(config => {
-        const hasOperation = config.hasOwnProperty('operation');
-        const hasField = config.hasOwnProperty('field');
-        const hasAlias = config.hasOwnProperty('alias');
+        const hasOperation = Object.prototype.hasOwnProperty.call(config, 'operation');
+        const hasField = Object.prototype.hasOwnProperty.call(config, 'field');
+        const hasAlias = Object.prototype.hasOwnProperty.call(config, 'alias');
         
         // Should be missing at least one required field
         expect(hasOperation && hasField && hasAlias).toBe(false);

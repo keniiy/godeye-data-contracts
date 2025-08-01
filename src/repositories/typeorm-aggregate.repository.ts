@@ -218,7 +218,7 @@ export abstract class TypeORMAggregateRepository<T extends ObjectLiteral>
    * Converts universal config to SQL with JOINs and aggregations
    */
   protected buildTypeORMQuery(config: ComplexQueryConfig): SelectQueryBuilder<T> {
-    let queryBuilder = this.createOptimizedQueryBuilder();
+    const queryBuilder = this.createOptimizedQueryBuilder();
     const alias = queryBuilder.alias;
 
     // 1. Apply WHERE conditions
