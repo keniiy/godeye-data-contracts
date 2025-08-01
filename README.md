@@ -1,4 +1,4 @@
-# @kenniy/godeye-data-contracts v1.2.5
+# @kenniy/godeye-data-contracts v1.2.6
 
 [![npm version](https://badge.fury.io/js/@kenniy%2Fgodeye-data-contracts.svg)](https://badge.fury.io/js/@kenniy%2Fgodeye-data-contracts)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -24,14 +24,14 @@ Eliminates 82.5% of repository repetition across TypeORM and Mongoose services w
 - [⚡ Core Pattern](#-core-pattern---whereconfig--querydto) - WhereConfig implementation  
 - [🔍 Search Features](#-intelligent-search-features) - Multi-algorithm search strategies
 - [📚 Complete Documentation](#-complete-documentation) - All docs, examples, and guides
-- [🔄 What's New](#-whats-new-in-v125) - Latest v1.2.5 features
+- [🔄 What's New](#-whats-new-in-v126) - Latest v1.2.6 features
 
 ## 🚀 Quick Start
 
 ```bash
-npm install @kenniy/godeye-data-contracts@1.2.5
+npm install @kenniy/godeye-data-contracts@1.2.6
 # or
-pnpm add @kenniy/godeye-data-contracts@1.2.5
+pnpm add @kenniy/godeye-data-contracts@1.2.6
 ```
 
 ```typescript
@@ -336,7 +336,16 @@ The package includes comprehensive tests demonstrating all functionality:
 npm test
 ```
 
-## 🔄 What's New in v1.2.5
+## 🔄 What's New in v1.2.6
+
+### Complete Documentation Suite
+
+- **NEW**: Comprehensive documentation in `/docs` directory
+- **NEW**: API Reference with all classes, methods, and interfaces
+- **NEW**: Migration Guide for version upgrades and pattern transitions
+- **NEW**: Best Practices Guide for enterprise implementation
+- **NEW**: Troubleshooting Guide with solutions for common issues
+- Updated README with navigation and comprehensive linking
 
 ### Enhanced Swagger UI
 
