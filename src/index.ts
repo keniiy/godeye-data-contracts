@@ -70,6 +70,21 @@ export { IKongUserContext, IKongAuthConfig, IUserPermissions, IAuthGuardConfig }
 export { BaseTypeORMRepository } from './repositories/base-typeorm.repository';
 export { BaseMongooseRepository } from './repositories/base-mongoose.repository';
 
+// Aggregate Repository Classes - Unified aggregation for both ORMs
+export { TypeORMAggregateRepository } from './repositories/typeorm-aggregate.repository';
+export { MongooseAggregateRepository } from './repositories/mongoose-aggregate.repository';
+
+// Aggregate Repository Interface & Types
+export {
+  IAggregateRepository,
+  ComplexQueryConfig,
+  JoinConfig,
+  AggregationConfig,
+  PaginatedResult,
+  AggregationPipeline,
+  QueryBuilderFunction
+} from './repositories/base-aggregate.repository';
+
 // Query DTOs with ICriteria transformation
 export {
   BaseQueryDto,
