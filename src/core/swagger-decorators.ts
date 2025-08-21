@@ -41,7 +41,10 @@ export function Api<T>(responseDto: Type<T>, options: ApiOptions = {}) {
     // Auto-detect HTTP method and status
     const httpMethod = getHttpMethodFromDecorators(target, propertyKey);
     const defaultStatus = getDefaultStatusCode(httpMethod);
-    const status = options.status || defaultStatus;
+    
+    // Priority order: 1) Explicit options.status, 2) @HttpCode metadata, 3) Auto-detected default
+    const httpCodeStatus = Reflect.getMetadata('__httpCode__', descriptor.value);
+    const status = options.status ?? httpCodeStatus ?? defaultStatus;
 
     // Auto-detect if this is likely a paginated response
     const isPaginated =
