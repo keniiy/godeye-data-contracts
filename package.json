@@ -11,8 +11,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:aggregate": "jest --testPathPattern=aggregate",
-    "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix",
+    "lint": "eslint src/**/*.ts --ignore-pattern 'src/tests/**' --ignore-pattern 'src/test-utils/**'",
+    "lint:fix": "eslint src/**/*.ts --fix --ignore-pattern 'src/tests/**' --ignore-pattern 'src/test-utils/**'",
     "prepare": "pnpm run build",
     "prepublishOnly": "pnpm run lint && pnpm run build"
   },
