@@ -256,9 +256,9 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    */
   async findOne(
     whereConfig: IWhereConfig,
-    queryDto: any
+    queryDto?: any
   ): Promise<T | null> {
-    const criteria = queryDto.toICriteria();
+    const criteria = queryDto ? queryDto.toICriteria() : {};
     return this.executeIntelligentSearch(whereConfig, criteria, { single: true });
   }
 
@@ -278,12 +278,13 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    */
   async findById(
     id: string | number,
-    whereConfig: IWhereConfig,
+    whereConfig?: IWhereConfig,
     queryDto?: any
   ): Promise<T | null> {
+    const defaultWhereConfig = whereConfig || { conditions: {} };
     const criteria = queryDto ? queryDto.toICriteria() : {};
     criteria.where = { ...criteria.where, id };
-    return this.executeIntelligentSearch(whereConfig, criteria, { single: true });
+    return this.executeIntelligentSearch(defaultWhereConfig, criteria, { single: true });
   }
 
   // ============================================================================
