@@ -90,7 +90,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   ) {
     this.entityName = this.repository.metadata.name;
     this.entityCacheKey = `${this.entityName}_${this.repository.metadata.tableName}`;
-    
+
     // Eagerly populate cache on instantiation
     this.preloadRelationCache();
   }
@@ -137,9 +137,11 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
       const result = Array.from(relationsSet);
       TYPEORM_RELATION_CACHE.set(this.entityCacheKey, result);
       return result;
-      
     } catch (error: any) {
-      console.warn(`Could not auto-discover relations for entity ${this.entityName}:`, error?.message || error);
+      console.warn(
+        `Could not auto-discover relations for entity ${this.entityName}:`,
+        error?.message || error
+      );
       const emptyResult: string[] = [];
       TYPEORM_RELATION_CACHE.set(this.entityCacheKey, emptyResult);
       return emptyResult;
@@ -150,7 +152,10 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    * Get entity relations with O(1) global cache lookup
    */
   protected getEntityRelations(): string[] {
-    return TYPEORM_RELATION_CACHE.get(this.entityCacheKey) || this.discoverRelations();
+    return (
+      TYPEORM_RELATION_CACHE.get(this.entityCacheKey) ||
+      this.discoverRelations()
+    );
   }
 
   /**
@@ -158,17 +163,18 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    */
   protected isValidRelationPath(relationPath: string): boolean {
     const cacheKey = `${this.entityCacheKey}:${relationPath}`;
-    
+
     const cached = TYPEORM_VALIDATION_CACHE.get(cacheKey);
     if (cached !== undefined) {
       return cached;
     }
 
     const knownRelations = this.getEntityRelations();
-    const rootRelation = relationPath.indexOf('.') !== -1 
-      ? relationPath.substring(0, relationPath.indexOf('.'))
-      : relationPath;
-    
+    const rootRelation =
+      relationPath.indexOf(".") !== -1
+        ? relationPath.substring(0, relationPath.indexOf("."))
+        : relationPath;
+
     const isValid = knownRelations.includes(rootRelation);
     TYPEORM_VALIDATION_CACHE.set(cacheKey, isValid);
     return isValid;
@@ -186,17 +192,21 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
     try {
       const entityMetadata = this.repository.metadata;
       const searchableFields = new Set<string>();
-      
+
       // Add default searchable fields
-      const defaultFields = ['name', 'title', 'description', 'email'];
-      defaultFields.forEach(field => searchableFields.add(field));
-      
+      const defaultFields = ["name", "title", "description", "email"];
+      defaultFields.forEach((field) => searchableFields.add(field));
+
       // Discover text fields from TypeORM metadata
       const columns = entityMetadata.columns;
       for (let i = 0; i < columns.length; i++) {
         const column = columns[i];
         // Check for string/text type columns
-        if (column.type === 'varchar' || column.type === 'text' || column.type === String) {
+        if (
+          column.type === "varchar" ||
+          column.type === "text" ||
+          column.type === String
+        ) {
           searchableFields.add(column.propertyName);
         }
       }
@@ -204,9 +214,8 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
       const result = Array.from(searchableFields);
       TYPEORM_SEARCHABLE_CACHE.set(this.entityCacheKey, result);
       return result;
-      
     } catch (error) {
-      const fallback = ['name', 'title', 'description', 'email'];
+      const fallback = ["name", "title", "description", "email"];
       TYPEORM_SEARCHABLE_CACHE.set(this.entityCacheKey, fallback);
       return fallback;
     }
@@ -218,18 +227,137 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    */
   protected validateRelations(relations: string[]): string[] {
     const knownRelations = this.getEntityRelations();
-    const invalidRelations = relations.filter(relationPath => {
-      const rootRelation = relationPath.split('.')[0];
+    const invalidRelations = relations.filter((relationPath) => {
+      const rootRelation = relationPath.split(".")[0];
       return !knownRelations.includes(rootRelation);
     });
 
     // Warn about invalid relations but continue
     if (invalidRelations.length > 0) {
-      console.warn(`⚠️ Unknown relations for ${this.entityName}: ${invalidRelations.join(', ')}`);
-      console.warn(`📋 Available relations: ${knownRelations.join(', ')}`);
+      console.warn(
+        `⚠️ Unknown relations for ${this.entityName}: ${invalidRelations.join(
+          ", "
+        )}`
+      );
+      console.warn(`📋 Available relations: ${knownRelations.join(", ")}`);
     }
 
     return relations; // Return all relations - let ORM handle gracefully
+  }
+
+  /**
+   * Normalize query input to ICriteria format
+   * BACKWARD COMPATIBLE: Handles both DTO class instances and plain HTTP objects
+   */
+  protected normalizeToCriteria(queryDto: any): ICriteria<T> {
+    // If it's a class instance with toICriteria method, use it
+    if (queryDto && typeof queryDto.toICriteria === 'function') {
+      return queryDto.toICriteria();
+    }
+
+    // Handle plain objects from HTTP requests
+    if (!queryDto || typeof queryDto !== 'object') {
+      return {};
+    }
+
+    const {
+      page = 1,
+      limit = 20,
+      include,
+      sort,
+      search,
+      status,
+      ...otherProps
+    } = queryDto;
+
+    const includeFields = this.parseIncludeParameter(include);
+    const criteria: ICriteria<T> = {
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
+      relations: includeFields.relations,
+      select: includeFields.fields.length > 0 ? includeFields.fields : undefined,
+      sort: this.parseSortParameter(sort),
+      search: search ? { term: search } : undefined,
+      where: this.buildWhereFromParams({ status, ...otherProps })
+    };
+
+    return criteria;
+  }
+
+  /**
+   * Parse include parameter into relations and fields
+   * Uses same logic as BaseQueryDto but adapted for repository context
+   */
+  protected parseIncludeParameter(includeStr?: string): { relations: string[], fields: string[] } {
+    if (!includeStr || typeof includeStr !== 'string') {
+      return { relations: [], fields: [] };
+    }
+
+    const items = includeStr.split(',').map(s => s.trim()).filter(Boolean);
+    
+    return {
+      relations: items.filter(item => this.looksLikeRelation(item)),
+      fields: items.filter(item => !this.looksLikeRelation(item))
+    };
+  }
+
+  /**
+   * Determine if an include item looks like a relation
+   * Uses same heuristics as BaseQueryDto
+   */
+  protected looksLikeRelation(item: string): boolean {
+    // Items with dots are likely deep relations (e.g., 'business.owner')
+    if (item.includes('.')) return true;
+    
+    // Common field patterns that are NOT relations
+    const fieldPatterns = ['id', 'name', 'email', 'createdAt', 'updatedAt', 'status', 'type'];
+    if (fieldPatterns.includes(item)) return false;
+    
+    // Assume other items could be relations (repository will validate)
+    return true;
+  }
+
+  /**
+   * Parse sort parameter into sort object
+   * Compatible with BaseQueryDto sort format: 'field:ASC,field2:DESC'
+   */
+  protected parseSortParameter(sortStr?: string): Record<string, 'ASC' | 'DESC'> | undefined {
+    if (!sortStr || typeof sortStr !== 'string') return undefined;
+
+    const sortObj: Record<string, 'ASC' | 'DESC'> = {};
+    sortStr.split(',').forEach(item => {
+      const [field, direction = 'ASC'] = item.split(':');
+      if (field?.trim()) {
+        sortObj[field.trim()] = (direction.toUpperCase() as 'ASC' | 'DESC');
+      }
+    });
+
+    return Object.keys(sortObj).length > 0 ? sortObj : undefined;
+  }
+
+  /**
+   * Build where clause from remaining parameters
+   * Handles status and other query parameters
+   */
+  protected buildWhereFromParams(params: Record<string, any>): any {
+    const where: any = {};
+    
+    // Handle status filter
+    if (params.status && ['active', 'inactive', 'deleted'].includes(params.status)) {
+      where.status = params.status;
+    }
+
+    // Add other non-null, non-undefined parameters as potential where conditions
+    Object.keys(params).forEach(key => {
+      if (key !== 'status' && params[key] != null && params[key] !== '') {
+        // Only add simple value parameters, avoid complex objects
+        if (typeof params[key] === 'string' || typeof params[key] === 'number' || typeof params[key] === 'boolean') {
+          where[key] = params[key];
+        }
+      }
+    });
+
+    return Object.keys(where).length > 0 ? where : undefined;
   }
 
   async count(criteria: ICriteria<T> = {}): Promise<number> {
@@ -242,39 +370,49 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    * Optimized pagination with whereConfig pattern
    * Clean separation of backend control and frontend requests
    * Performance: ~10-20ms (query + count executed in parallel)
+   * 
+   * BACKWARD COMPATIBLE: Handles both class instances (with toICriteria) and plain objects
    */
   async findWithPagination(
     whereConfig: IWhereConfig,
     queryDto: any
   ): Promise<IPaginationResult<T>> {
-    const criteria = queryDto.toICriteria();
+    const criteria = this.normalizeToCriteria(queryDto);
     return this.executeIntelligentSearch(whereConfig, criteria);
   }
 
   /**
    * Find single entity with whereConfig pattern
+   * 
+   * BACKWARD COMPATIBLE: Handles both class instances (with toICriteria) and plain objects
    */
-  async findOne(
-    whereConfig: IWhereConfig,
-    queryDto?: any
-  ): Promise<T | null> {
-    const criteria = queryDto ? queryDto.toICriteria() : {};
-    return this.executeIntelligentSearch(whereConfig, criteria, { single: true });
+  async findOne(whereConfig: IWhereConfig, queryDto?: any): Promise<T | null> {
+    const criteria = queryDto ? this.normalizeToCriteria(queryDto) : {};
+    const result = await this.executeIntelligentSearch(whereConfig, criteria, {
+      single: true,
+    });
+    // Extract the actual entity from the wrapped result
+    return result?.data || null;
   }
 
   /**
    * Find multiple entities with whereConfig pattern
+   * 
+   * BACKWARD COMPATIBLE: Handles both class instances (with toICriteria) and plain objects
    */
-  async find(
-    whereConfig: IWhereConfig,
-    queryDto: any
-  ): Promise<T[]> {
-    const criteria = queryDto.toICriteria();
-    return this.executeIntelligentSearch(whereConfig, criteria, { array: true });
+  async find(whereConfig: IWhereConfig, queryDto: any): Promise<T[]> {
+    const criteria = this.normalizeToCriteria(queryDto);
+    const result = await this.executeIntelligentSearch(whereConfig, criteria, {
+      array: true,
+    });
+    // Extract the actual items array from the wrapped result
+    return result?.items || [];
   }
 
   /**
    * Find entity by ID with whereConfig pattern
+   * 
+   * BACKWARD COMPATIBLE: Handles both class instances (with toICriteria) and plain objects
    */
   async findById(
     id: string | number,
@@ -282,9 +420,13 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
     queryDto?: any
   ): Promise<T | null> {
     const defaultWhereConfig = whereConfig || { conditions: {} };
-    const criteria = queryDto ? queryDto.toICriteria() : {};
+    const criteria = queryDto ? this.normalizeToCriteria(queryDto) : {};
     criteria.where = { ...criteria.where, id };
-    return this.executeIntelligentSearch(defaultWhereConfig, criteria, { single: true });
+    const result = await this.executeIntelligentSearch(defaultWhereConfig, criteria, {
+      single: true,
+    });
+    // Extract the actual entity from the wrapped result
+    return result?.data || null;
   }
 
   // ============================================================================
@@ -323,19 +465,27 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
 
       // 4. Apply intelligent search with backend config
       if (criteria.search?.term && whereConfig.searchConfig) {
-        this.applyConfiguredSearch(queryBuilder, criteria.search.term, whereConfig.searchConfig);
+        this.applyConfiguredSearch(
+          queryBuilder,
+          criteria.search.term,
+          whereConfig.searchConfig
+        );
       }
 
       // 5. Apply relations with graceful error handling
-      const { validRelations, failedRelations } = this.applyRelationsWithErrorHandling(
-        queryBuilder,
-        criteria.relations || []
-      );
+      const { validRelations, failedRelations } =
+        this.applyRelationsWithErrorHandling(
+          queryBuilder,
+          criteria.relations || []
+        );
 
       // 6. Apply sorting
       if (criteria.sort) {
         Object.entries(criteria.sort).forEach(([field, direction]) => {
-          queryBuilder.addOrderBy(`${queryBuilder.alias}.${field}`, direction as "ASC" | "DESC");
+          queryBuilder.addOrderBy(
+            `${queryBuilder.alias}.${field}`,
+            direction as "ASC" | "DESC"
+          );
         });
       } else {
         queryBuilder.orderBy(`${queryBuilder.alias}.id`, "DESC");
@@ -346,21 +496,36 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
       if (options.single) {
         result = {
           data: await queryBuilder.getOne(),
-          metadata: this.buildMetadata(startTime, whereConfig, validRelations, failedRelations)
+          metadata: this.buildMetadata(
+            startTime,
+            whereConfig,
+            validRelations,
+            failedRelations
+          ),
         };
       } else if (options.array) {
         result = {
           items: await queryBuilder.getMany(),
-          metadata: this.buildMetadata(startTime, whereConfig, validRelations, failedRelations)
+          metadata: this.buildMetadata(
+            startTime,
+            whereConfig,
+            validRelations,
+            failedRelations
+          ),
         };
       } else {
         // Pagination
         const { page = 1, limit = 20 } = criteria;
         const countQueryBuilder = this.createOptimizedQueryBuilder();
-        
+
         // Apply same conditions to count query
-        this.copyConditionsToCountQuery(countQueryBuilder, queryBuilder, whereConfig, criteria);
-        
+        this.copyConditionsToCountQuery(
+          countQueryBuilder,
+          queryBuilder,
+          whereConfig,
+          criteria
+        );
+
         // Apply pagination
         const skip = (page - 1) * limit;
         queryBuilder.skip(skip).take(limit);
@@ -368,7 +533,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
         // Execute in parallel
         const [items, total] = await Promise.all([
           queryBuilder.getMany(),
-          countQueryBuilder.getCount()
+          countQueryBuilder.getCount(),
         ]);
 
         result = {
@@ -379,13 +544,22 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
           totalPages: Math.ceil(total / limit),
           hasNext: page * limit < total,
           hasPrev: page > 1,
-          metadata: this.buildMetadata(startTime, whereConfig, validRelations, failedRelations, { total, returned: items.length })
+          metadata: this.buildMetadata(
+            startTime,
+            whereConfig,
+            validRelations,
+            failedRelations,
+            { total, returned: items.length }
+          ),
         };
       }
 
       return result;
     } catch (error) {
-      this.handleQueryError("intelligentSearch", error, { whereConfig, criteria });
+      this.handleQueryError("intelligentSearch", error, {
+        whereConfig,
+        criteria,
+      });
       throw error;
     }
   }
@@ -397,12 +571,15 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   /**
    * Apply WHERE conditions to query builder
    */
-  protected applyWhereConditions(queryBuilder: SelectQueryBuilder<T>, conditions: any): void {
+  protected applyWhereConditions(
+    queryBuilder: SelectQueryBuilder<T>,
+    conditions: any
+  ): void {
     Object.entries(conditions).forEach(([key, value], index) => {
       if (value !== undefined) {
         const paramKey = `where_${key}_${index}`;
         const condition = `${queryBuilder.alias}.${key} = :${paramKey}`;
-        
+
         if (index === 0 && !queryBuilder.expressionMap.wheres.length) {
           queryBuilder.where(condition, { [paramKey]: value });
         } else {
@@ -431,32 +608,44 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
 
         switch (config.defaultStrategy) {
           case SearchStrategy.FUZZY:
-            searchConditions.push(`levenshtein_distance(${queryBuilder.alias}.${field}, :${paramKey}) <= 2`);
+            searchConditions.push(
+              `levenshtein_distance(${queryBuilder.alias}.${field}, :${paramKey}) <= 2`
+            );
             parameters[paramKey] = searchTerm;
             break;
 
           case SearchStrategy.EXACT:
-            searchConditions.push(`${queryBuilder.alias}.${field} = :${paramKey}`);
+            searchConditions.push(
+              `${queryBuilder.alias}.${field} = :${paramKey}`
+            );
             parameters[paramKey] = searchTerm;
             break;
 
           case SearchStrategy.CONTAINS:
             if (config.isArray) {
-              searchConditions.push(`:${paramKey} = ANY(${queryBuilder.alias}.${field})`);
+              searchConditions.push(
+                `:${paramKey} = ANY(${queryBuilder.alias}.${field})`
+              );
               parameters[paramKey] = searchTerm;
             } else {
-              searchConditions.push(`${queryBuilder.alias}.${field} ILIKE :${paramKey}`);
+              searchConditions.push(
+                `${queryBuilder.alias}.${field} ILIKE :${paramKey}`
+              );
               parameters[paramKey] = `%${searchTerm}%`;
             }
             break;
 
           case SearchStrategy.STARTS_WITH:
-            searchConditions.push(`${queryBuilder.alias}.${field} ILIKE :${paramKey}`);
+            searchConditions.push(
+              `${queryBuilder.alias}.${field} ILIKE :${paramKey}`
+            );
             parameters[paramKey] = `${searchTerm}%`;
             break;
 
           case SearchStrategy.ENDS_WITH:
-            searchConditions.push(`${queryBuilder.alias}.${field} ILIKE :${paramKey}`);
+            searchConditions.push(
+              `${queryBuilder.alias}.${field} ILIKE :${paramKey}`
+            );
             parameters[paramKey] = `%${searchTerm}`;
             break;
         }
@@ -464,7 +653,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
     });
 
     if (searchConditions.length > 0) {
-      queryBuilder.andWhere(`(${searchConditions.join(' OR ')})`, parameters);
+      queryBuilder.andWhere(`(${searchConditions.join(" OR ")})`, parameters);
     }
   }
 
@@ -474,9 +663,20 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   protected applyRelationsWithErrorHandling(
     queryBuilder: SelectQueryBuilder<T>,
     relations: string[]
-  ): { validRelations: string[]; failedRelations: Array<{ relation: string; error: string; severity: string }> } {
+  ): {
+    validRelations: string[];
+    failedRelations: Array<{
+      relation: string;
+      error: string;
+      severity: string;
+    }>;
+  } {
     const validRelations: string[] = [];
-    const failedRelations: Array<{ relation: string; error: string; severity: string }> = [];
+    const failedRelations: Array<{
+      relation: string;
+      error: string;
+      severity: string;
+    }> = [];
 
     relations.forEach((relation) => {
       try {
@@ -487,14 +687,14 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
           failedRelations.push({
             relation,
             error: "Relation not found in entity metadata",
-            severity: "warning"
+            severity: "warning",
           });
         }
       } catch (error: any) {
         failedRelations.push({
           relation,
           error: error.message || "Failed to load relation",
-          severity: "warning"
+          severity: "warning",
         });
       }
     });
@@ -522,10 +722,14 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
     if (criteria.where) {
       this.applyWhereConditions(countQueryBuilder, criteria.where);
     }
-    
+
     // Apply same search conditions
     if (criteria.search?.term && whereConfig.searchConfig) {
-      this.applyConfiguredSearch(countQueryBuilder, criteria.search.term, whereConfig.searchConfig);
+      this.applyConfiguredSearch(
+        countQueryBuilder,
+        criteria.search.term,
+        whereConfig.searchConfig
+      );
     }
   }
 
@@ -536,7 +740,11 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
     startTime: number,
     whereConfig: IWhereConfig,
     validRelations: string[],
-    failedRelations: Array<{ relation: string; error: string; severity: string }>,
+    failedRelations: Array<{
+      relation: string;
+      error: string;
+      severity: string;
+    }>,
     additionalData?: any
   ): any {
     return {
@@ -545,7 +753,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
       backendConditions: Object.keys(whereConfig.conditions || {}),
       relationsLoaded: validRelations,
       relationErrors: failedRelations,
-      ...additionalData
+      ...additionalData,
     };
   }
 
@@ -554,7 +762,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    */
   protected extractAlgorithms(searchConfig?: ISearchFieldConfig[]): string[] {
     if (!searchConfig) return [];
-    return [...new Set(searchConfig.map(config => config.defaultStrategy))];
+    return [...new Set(searchConfig.map((config) => config.defaultStrategy))];
   }
 
   /**
@@ -601,7 +809,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   }
 
   /**
-   * Optimized update with selective field updates  
+   * Optimized update with selective field updates
    * Performance: ~3-8ms per update
    */
   async updateById(id: string | number, data: Partial<T>): Promise<T | null> {
@@ -630,7 +838,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
 
   /**
    * Optimized bulk updates with batch processing
-   * Performance: ~20-100ms for 1000 updates (vs ~5000ms individual updates)  
+   * Performance: ~20-100ms for 1000 updates (vs ~5000ms individual updates)
    */
   async updateMany(
     criteria: ICriteria<T>,
@@ -704,20 +912,24 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
     try {
       // First update
       await this.repository.update(criteria.where || {}, data);
-      
+
       // Then find the updated entity
       const queryBuilder = this.createOptimizedQueryBuilder();
       this.applyCriteria(queryBuilder, criteria);
-      
+
       if (options?.populate) {
-        this.applyDeepRelations(queryBuilder, options.populate, queryBuilder.alias);
+        this.applyDeepRelations(
+          queryBuilder,
+          options.populate,
+          queryBuilder.alias
+        );
       }
-      
+
       const result = await queryBuilder.getOne();
 
       this.logQueryMetrics("findOneAndUpdate", performance.now() - startTime, {
         criteria,
-        data
+        data,
       });
 
       return result as R | null;
@@ -854,7 +1066,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
   /**
    * Apply deep relations with nested JOIN support
    * Handles relations like 'business.owner', 'posts.comments.author'
-   * 
+   *
    * Examples:
    * - 'profile' → user.leftJoinAndSelect('user.profile', 'profile')
    * - 'business.owner' → user.leftJoinAndSelect('user.business', 'business')
@@ -871,9 +1083,14 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
     const processedPaths = new Set<string>();
 
     relations.forEach((relation) => {
-      if (relation.includes('.')) {
+      if (relation.includes(".")) {
         // Handle nested relations like 'business.owner'
-        this.applyNestedRelation(queryBuilder, relation, rootAlias, processedPaths);
+        this.applyNestedRelation(
+          queryBuilder,
+          relation,
+          rootAlias,
+          processedPaths
+        );
       } else {
         // Handle direct relations like 'profile'
         if (!processedPaths.has(relation)) {
@@ -894,21 +1111,21 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
     rootAlias: string,
     processedPaths: Set<string>
   ): void {
-    const pathParts = relationPath.split('.');
+    const pathParts = relationPath.split(".");
     let currentAlias = rootAlias;
-    let currentPath = '';
+    let currentPath = "";
 
     for (let i = 0; i < pathParts.length; i++) {
       const part = pathParts[i];
       currentPath = currentPath ? `${currentPath}.${part}` : part;
-      
+
       if (!processedPaths.has(currentPath)) {
         const relationAlias = this.generateRelationAlias(currentPath);
         const joinPath = `${currentAlias}.${part}`;
-        
+
         queryBuilder.leftJoinAndSelect(joinPath, relationAlias);
         processedPaths.add(currentPath);
-        
+
         currentAlias = relationAlias;
       } else {
         // Update current alias for already processed path
@@ -923,7 +1140,7 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
    * posts.comments.author → posts_comments_author
    */
   protected generateRelationAlias(relationPath: string): string {
-    return relationPath.replace(/\./g, '_');
+    return relationPath.replace(/\./g, "_");
   }
 
   // ============================================================================

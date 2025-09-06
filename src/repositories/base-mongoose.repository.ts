@@ -465,14 +465,131 @@ export abstract class BaseMongooseRepository<T extends Document> {
   }
 
   /**
+   * Normalize query input to ICriteria format
+   * BACKWARD COMPATIBLE: Handles both DTO class instances and plain HTTP objects
+   */
+  protected normalizeToCriteria(queryDto: any): ICriteria<T> {
+    // If it's a class instance with toICriteria method, use it
+    if (queryDto && typeof queryDto.toICriteria === 'function') {
+      return queryDto.toICriteria();
+    }
+
+    // Handle plain objects from HTTP requests
+    if (!queryDto || typeof queryDto !== 'object') {
+      return {};
+    }
+
+    const {
+      page = 1,
+      limit = 20,
+      include,
+      sort,
+      search,
+      status,
+      ...otherProps
+    } = queryDto;
+
+    const includeFields = this.parseIncludeParameter(include);
+    const criteria: ICriteria<T> = {
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
+      relations: includeFields.relations,
+      select: includeFields.fields.length > 0 ? includeFields.fields : undefined,
+      sort: this.parseSortParameter(sort),
+      search: search ? { term: search } : undefined,
+      where: this.buildWhereFromParams({ status, ...otherProps })
+    };
+
+    return criteria;
+  }
+
+  /**
+   * Parse include parameter into relations and fields
+   * Uses same logic as BaseQueryDto but adapted for repository context
+   */
+  protected parseIncludeParameter(includeStr?: string): { relations: string[], fields: string[] } {
+    if (!includeStr || typeof includeStr !== 'string') {
+      return { relations: [], fields: [] };
+    }
+
+    const items = includeStr.split(',').map(s => s.trim()).filter(Boolean);
+    
+    return {
+      relations: items.filter(item => this.looksLikeRelation(item)),
+      fields: items.filter(item => !this.looksLikeRelation(item))
+    };
+  }
+
+  /**
+   * Determine if an include item looks like a relation
+   * Uses same heuristics as BaseQueryDto
+   */
+  protected looksLikeRelation(item: string): boolean {
+    // Items with dots are likely deep relations (e.g., 'business.owner')
+    if (item.includes('.')) return true;
+    
+    // Common field patterns that are NOT relations
+    const fieldPatterns = ['id', 'name', 'email', 'createdAt', 'updatedAt', 'status', 'type'];
+    if (fieldPatterns.includes(item)) return false;
+    
+    // Assume other items could be relations (repository will validate)
+    return true;
+  }
+
+  /**
+   * Parse sort parameter into sort object
+   * Compatible with BaseQueryDto sort format: 'field:ASC,field2:DESC'
+   */
+  protected parseSortParameter(sortStr?: string): Record<string, 'ASC' | 'DESC'> | undefined {
+    if (!sortStr || typeof sortStr !== 'string') return undefined;
+
+    const sortObj: Record<string, 'ASC' | 'DESC'> = {};
+    sortStr.split(',').forEach(item => {
+      const [field, direction = 'ASC'] = item.split(':');
+      if (field?.trim()) {
+        sortObj[field.trim()] = (direction.toUpperCase() as 'ASC' | 'DESC');
+      }
+    });
+
+    return Object.keys(sortObj).length > 0 ? sortObj : undefined;
+  }
+
+  /**
+   * Build where clause from remaining parameters
+   * Handles status and other query parameters
+   */
+  protected buildWhereFromParams(params: Record<string, any>): any {
+    const where: any = {};
+    
+    // Handle status filter
+    if (params.status && ['active', 'inactive', 'deleted'].includes(params.status)) {
+      where.status = params.status;
+    }
+
+    // Add other non-null, non-undefined parameters as potential where conditions
+    Object.keys(params).forEach(key => {
+      if (key !== 'status' && params[key] != null && params[key] !== '') {
+        // Only add simple value parameters, avoid complex objects
+        if (typeof params[key] === 'string' || typeof params[key] === 'number' || typeof params[key] === 'boolean') {
+          where[key] = params[key];
+        }
+      }
+    });
+
+    return Object.keys(where).length > 0 ? where : undefined;
+  }
+
+  /**
    * Find entity by ID with whereConfig pattern
+   * 
+   * BACKWARD COMPATIBLE: Handles both class instances (with toICriteria) and plain objects
    */
   async findById(
     id: string,
     whereConfig: any,
     queryDto?: any
   ): Promise<T | null> {
-    const criteria = queryDto ? queryDto.toICriteria() : {};
+    const criteria = queryDto ? this.normalizeToCriteria(queryDto) : {};
     criteria.where = { ...criteria.where, _id: id };
     return this.executeIntelligentSearch(whereConfig, criteria, { single: true });
   }
@@ -502,9 +619,9 @@ export abstract class BaseMongooseRepository<T extends Document> {
     queryDto?: any
   ): Promise<T | null> {
     // Check if this is the new whereConfig pattern
-    if (queryDto && typeof queryDto.toICriteria === 'function') {
-      // New pattern: findOne(whereConfig, queryDto)
-      const criteria = queryDto.toICriteria();
+    if (queryDto && (typeof queryDto.toICriteria === 'function' || typeof queryDto === 'object')) {
+      // New pattern: findOne(whereConfig, queryDto) - handles both class instances and plain objects
+      const criteria = this.normalizeToCriteria(queryDto);
       return this.executeIntelligentSearch(whereConfigOrCriteria, criteria, { single: true });
     } else {
       // Backward compatibility: findOne(criteria)
