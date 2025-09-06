@@ -350,6 +350,10 @@ export abstract class BaseTypeORMRepository<T extends ObjectLiteral> {
     // Add other non-null, non-undefined parameters as potential where conditions
     Object.keys(params).forEach(key => {
       if (key !== 'status' && params[key] != null && params[key] !== '') {
+        // Filter out string representations of undefined/null
+        if (params[key] === 'undefined' || params[key] === 'null') {
+          return;
+        }
         // Only add simple value parameters, avoid complex objects
         if (typeof params[key] === 'string' || typeof params[key] === 'number' || typeof params[key] === 'boolean') {
           where[key] = params[key];

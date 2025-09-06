@@ -7,7 +7,9 @@
 
 import { ResponseFactory } from "../core/response";
 import { MongooseAggregateRepository } from "../repositories/mongoose-aggregate.repository";
+import { BaseTypeORMRepository } from "../repositories/base-typeorm.repository";
 import { Model, Document } from "mongoose";
+import { Repository } from "typeorm";
 import {
   ComplexQueryConfig,
   PaginatedResult,
@@ -376,6 +378,72 @@ describe("Migration Path Tests", () => {
       expect(response.data).toHaveProperty("items");
       expect(response.status_code).toBe(200);
       expect(response.timestamp).toBeDefined();
+    });
+  });
+
+  describe("HTTP Parameter Handling", () => {
+    class TestTypeORMRepository extends BaseTypeORMRepository<any> {
+      constructor() {
+        const mockRepository = {
+          metadata: { name: 'TestEntity', tableName: 'test_entities' },
+        } as Repository<any>;
+        super(mockRepository, {} as any);
+      }
+
+      // Expose protected method for testing
+      public testNormalizeToCriteria(params: any) {
+        return this.normalizeToCriteria(params);
+      }
+    }
+
+    it('should filter out undefined and null string parameters from HTTP requests', () => {
+      // Simulate HTTP request with string "undefined" and "null" values
+      const httpParams = {
+        page: '1',
+        limit: '20',
+        status: 'active',
+        userId: 'undefined',  // String "undefined" should be filtered out
+        facilityId: 'null',   // String "null" should be filtered out  
+        businessId: '123',    // Valid value should be kept
+        search: 'test query',
+        sort: 'createdAt:DESC'
+      };
+
+      const testRepo = new TestTypeORMRepository();
+      const criteria = testRepo.testNormalizeToCriteria(httpParams);
+
+      // Should keep valid parameters
+      expect(criteria.page).toBe(1);
+      expect(criteria.limit).toBe(20);
+      expect(criteria.where?.status).toBe('active');
+      expect(criteria.where?.businessId).toBe('123');
+      expect(criteria.search?.term).toBe('test query');
+      expect(criteria.sort?.createdAt).toBe('DESC');
+
+      // Should filter out string "undefined" and "null" 
+      expect(criteria.where?.userId).toBeUndefined();
+      expect(criteria.where?.facilityId).toBeUndefined();
+    });
+
+    it('should handle empty and invalid parameters gracefully', () => {
+      const httpParams = {
+        page: '',
+        limit: 'invalid',
+        userId: 'undefined',
+        facilityId: null,
+        businessId: undefined,
+        search: '',
+        sort: 'invalid-sort'
+      };
+
+      const testRepo = new TestTypeORMRepository();
+      const criteria = testRepo.testNormalizeToCriteria(httpParams);
+
+      // Should use defaults for invalid values
+      expect(criteria.page).toBe(1); // Default when empty string
+      expect(criteria.limit).toBe(20); // Default when invalid
+      expect(criteria.search).toBeUndefined(); // Empty string should not create search
+      expect(criteria.where).toBeUndefined(); // No valid parameters
     });
   });
 });

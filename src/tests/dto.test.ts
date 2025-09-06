@@ -222,5 +222,6 @@ describe('DTO System', () => {
       expect(criteria.search).toBeUndefined();
       expect(criteria.sort).toBeUndefined();
     });
+
   });
 });
